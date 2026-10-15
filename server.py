@@ -380,6 +380,16 @@ class SmartBankHandler(SimpleHTTPRequestHandler):
             self.send_error(403, "Not allowed")
             return
 
+        if url.path == "/favicon.ico":          # browser apne aap maangta hai
+            with open(os.path.join(ROOT, "favicon.svg"), "rb") as f:
+                icon = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml")
+            self.send_header("Content-Length", str(len(icon)))
+            self.end_headers()
+            self.wfile.write(icon)
+            return
+
         if url.path == "/api/health":
             db = self.pick_db(query)
             self.send_json({"ok": True, "driver": "sqlite", "file": db.rel_path(),
@@ -455,7 +465,18 @@ class SmartBankHandler(SimpleHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
-class IPv6Server(ThreadingHTTPServer):
+class QuietServer(ThreadingHTTPServer):
+    """Browser beech me hi page chhod de (link par click) to connection toot jaata hai.
+    Ye normal hai - iska lamba traceback console me nahi chahiye."""
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (ConnectionAbortedError, ConnectionResetError, BrokenPipeError)):
+            return
+        super().handle_error(request, client_address)
+
+
+class IPv6Server(QuietServer):
     address_family = socket.AF_INET6
 
 
@@ -463,7 +484,7 @@ def make_server(port, tries=10):
     last = None
     for p in range(port, port + tries):
         try:
-            return ThreadingHTTPServer(("127.0.0.1", p), SmartBankHandler), p
+            return QuietServer(("127.0.0.1", p), SmartBankHandler), p
         except OSError as err:
             last = err
     raise SystemExit("Koi free port nahi mila (%s)" % last)
@@ -488,6 +509,12 @@ def main():
     parser.add_argument("--reset", action="store_true", help="database mita ke naya shuru karo")
     parser.add_argument("--quiet", action="store_true", help="SQL statements console me mat dikhao")
     args = parser.parse_args()
+
+    # har line turant dikhe (output pipe me jaaye tab bhi)
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
 
     os.makedirs(DATA_DIR, exist_ok=True)
     if args.reset:

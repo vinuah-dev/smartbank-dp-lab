@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SmartBank - Transaction History</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -23,18 +24,7 @@
     <div class="grid3">
       <div>
         <label for="fType">Type</label>
-        <select id="fType" onchange="loadHistory()">
-          <option value="">All</option>
-          <option>Deposit</option>
-          <option>Withdrawal</option>
-          <option>Transfer</option>
-          <option>Bill Payment</option>
-          <option>Mobile Recharge</option>
-          <option>Interest Credit</option>
-          <option>Cashback</option>
-          <option>Service Charge</option>
-          <option>Reversal</option>
-        </select>
+        <select id="fType" onchange="loadHistory()"><option value="">All</option></select>
       </div>
       <div>
         <label for="fStatus">Status</label>
@@ -63,6 +53,7 @@
 
     <p class="sub" style="margin-top:10px" id="hCount"></p>
     <button class="btn small grey" onclick="exportStatement()">Download statement (CSV)</button>
+    <button class="btn small grey" onclick="window.print()">Print statement</button>
   </div>
 
   <div class="card">
@@ -122,10 +113,19 @@
 <script>
 if (requireCustomer()) {
   renderHeader("history.html");
+  fillTypes();
   loadHistory();
   loadCommands();
   loadAccessLog();
   loadDbStats();
+}
+
+// is account me jo bhi types hain wahi filter me dikhao
+function fillTypes() {
+  const types = Array.from(new Set(BankingFacade.getInstance()
+                  .statement(SessionManager.getInstance().get().accNo).map(t => t.type))).sort();
+  $("fType").innerHTML = '<option value="">All</option>' +
+    types.map(t => "<option>" + esc(t) + "</option>").join("");
 }
 
 function currentRows() {

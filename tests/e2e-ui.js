@@ -77,8 +77,10 @@
   check("login lands on dashboard", path(w) === "dashboard.html");
   check("dashboard shows balance and chart", /Rs\./.test(text(w, "balAmount")) && !!w.document.querySelector("#chart svg"));
   check("dashboard recent transactions filled", w.document.querySelectorAll("#txnBody tr").length >= 3);
-  check("header shows SQLite badge and account switcher",
-        !!w.document.querySelector(".dbpill.sqlite") && w.document.querySelectorAll("#accPick option").length >= 2);
+  const sqlite = db().isSQLite();
+  check("header shows the database badge and account switcher",
+        !!w.document.querySelector(sqlite ? ".dbpill.sqlite" : ".dbpill.local") &&
+        w.document.querySelectorAll("#accPick option").length >= 2);
   const savings = w.eval("SessionManager").getInstance().get().accNo;
 
   /* ---------------- banking: withdraw / deposit / undo ---------------- */
@@ -237,8 +239,8 @@
   w = await open("dashboard.html");
   check("staff sent away from customer dashboard", path(w) === "admin.html", path(w));
   w = await open("database.html");
-  check("database page: ER diagram + SQL console", !!w.document.querySelector("#erDiagram svg") &&
-        w.document.querySelectorAll("#samples .btn").length === 7);
+  check("database page: ER diagram + SQL console (or browser-mode note)", !!w.document.querySelector("#erDiagram svg") &&
+        (sqlite ? w.document.querySelectorAll("#samples .btn").length === 7 : /server mode/.test(text(w, "sqlCard"))));
   w.doLogout(); await sleep(300);
 
   /* ---------------- Ramesh on a frozen account ---------------- */

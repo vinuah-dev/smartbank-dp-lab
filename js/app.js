@@ -51,19 +51,6 @@ function localDayKey(date) {
          String(d.getDate()).padStart(2, "0");
 }
 
-// browser tab ka chhota icon
-(function addFavicon() {
-  if (typeof document === "undefined" || !document.head || !document.createElement) return;
-  const link = document.createElement("link");
-  link.rel  = "icon";
-  link.href = "data:image/svg+xml," + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-    '<rect width="32" height="32" rx="6" fill="#1a4d8f"/>' +
-    '<text x="16" y="21" font-size="13" font-family="Arial" font-weight="bold" ' +
-    'fill="#fff" text-anchor="middle">SB</text></svg>');
-  document.head.appendChild(link);
-})();
-
 
 /* ---------------- kaun si transaction daily limit me ginti hai ---------------- */
 
