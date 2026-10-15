@@ -363,3 +363,156 @@ footer {
   padding: 7px 20px;
   text-align: center;
 }
+
+/* ==========================================================
+   v2 additions: database badge, pipeline, UML, DP Lab, print
+   ========================================================== */
+
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.nowrap { white-space: nowrap; }
+td.num.cr { color: #1c7a3c; }
+td.num.dr { color: #b32d2d; }
+
+.dbpill {
+  display: inline-block; font-size: 10.5px; font-weight: bold; letter-spacing: .3px;
+  padding: 1px 7px; border-radius: 9px; vertical-align: middle; margin-left: 4px;
+}
+.dbpill.sqlite { background: #e6f6ea; color: #14622f; }
+.dbpill.local  { background: #fff3cd; color: #7a5b00; }
+
+.login-foot { text-align: center; margin-top: 16px; font-size: 13px; }
+.login-foot a { color: var(--brand); }
+
+/* ---------- pattern pipeline (har transaction ke result me) ---------- */
+.pipeline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 4px; }
+.pchip {
+  font-size: 11.5px; padding: 3px 9px; border-radius: 12px;
+  border: 1px dashed var(--border); color: var(--muted); background: transparent;
+}
+.pchip.on { background: var(--brand); color: #fff; border: 1px solid var(--brand); font-weight: bold; }
+.parrow { color: var(--muted); font-size: 13px; }
+
+/* ---------- UML diagrams ---------- */
+.uml-wrap {
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+  padding: 8px; margin: 10px 0; overflow-x: auto;
+}
+svg.uml { display: block; margin: 0 auto; }
+.uml-frame  { fill: var(--card); stroke: var(--text); stroke-width: 1.2; }
+.uml-head   { fill: var(--brand); fill-opacity: .12; stroke: none; }
+.uml-client .uml-frame { stroke-dasharray: 5 3; }
+.uml-client .uml-head  { fill: #f0b429; fill-opacity: .22; }
+.uml-table  .uml-head  { fill: #1c7a3c; fill-opacity: .18; }
+.uml-name   { font: bold 13px Arial, Helvetica, sans-serif; fill: var(--text); }
+.uml-italic { font-style: italic; }
+.uml-stereo { font: italic 10.5px Arial, Helvetica, sans-serif; fill: var(--muted); }
+.uml-member { font: 11px Consolas, "Courier New", monospace; fill: var(--text); }
+.uml-sep    { stroke: var(--text); stroke-width: .7; opacity: .45; }
+.uml-link   { fill: none; stroke: var(--text); stroke-width: 1.2; }
+.uml-dashed { stroke-dasharray: 5 4; }
+.uml-hollow { fill: var(--card); stroke: var(--text); stroke-width: 1.1; }
+.uml-open   { fill: none; stroke: var(--text); stroke-width: 1.3; }
+.uml-label  { font: italic 10.5px Arial, Helvetica, sans-serif; fill: var(--muted);
+              paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
+.uml-caption { font-size: 12.5px; color: var(--muted); text-align: center; margin: 6px 0 2px; }
+
+/* ---------- DP Lab page ---------- */
+.subnav {
+  position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 4px;
+  background: var(--bg); padding: 8px 0; margin-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.subnav a {
+  font-size: 13px; text-decoration: none; padding: 5px 11px; border-radius: var(--btn-radius);
+  border: 1px solid var(--border); background: var(--card); color: var(--text);
+}
+.subnav a:hover { border-color: var(--brand); color: var(--brand); }
+
+.exp-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.exp-no { font-size: 12px; font-weight: bold; color: #fff; background: var(--brand);
+          padding: 2px 9px; border-radius: 10px; }
+.aim { background: rgba(26,77,143,.06); border-left: 4px solid var(--brand); padding: 9px 12px;
+       border-radius: var(--btn-radius); font-size: 14px; margin: 8px 0 4px; }
+
+.pblock { border-top: 1px dashed var(--border); padding-top: 14px; margin-top: 16px; }
+.pblock h3 { font-size: 17px; color: var(--brand); margin: 0 0 4px; }
+.pblock .kind { font-size: 11.5px; font-weight: normal; color: var(--muted); }
+.intent { font-size: 14px; margin: 6px 0; }
+.where { font-size: 13.5px; color: var(--muted); }
+ul.plist { margin: 6px 0 6px 20px; font-size: 14px; }
+ul.plist li { margin-bottom: 3px; }
+
+.demo-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.demo-bar .btn { margin-top: 0; }
+.demo-bar input, .demo-bar select { width: auto; min-width: 120px; }
+
+.console {
+  background: #1e1e1e; color: #d4f7d4; font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px; padding: 11px 13px; border-radius: 6px; margin-top: 10px;
+  white-space: pre-wrap; overflow-x: auto; max-height: 420px; overflow-y: auto; line-height: 1.5;
+}
+.console:empty { display: none; }
+.console .ok   { color: #86f58a; }
+.console .bad  { color: #ff9c9c; }
+.console .info { color: #9cd7ff; }
+.console .warn { color: #ffe08a; }
+.console .sql  { color: #f5c2ff; }
+
+pre.code {
+  background: #1e1e1e; color: #e6e6e6; font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px; padding: 12px 14px; border-radius: 6px; margin-top: 10px;
+  overflow: auto; max-height: 460px; line-height: 1.45; tab-size: 2;
+}
+pre.code .k { color: #569cd6; }
+pre.code .s { color: #ce9178; }
+pre.code .c { color: #6a9955; font-style: italic; }
+pre.code .n { color: #b5cea8; }
+pre.code .t { color: #4ec9b0; }
+.code-title { font: bold 12px Consolas, monospace; color: var(--muted); margin-top: 12px; }
+
+.preview-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.skin {
+  background: var(--bg); color: var(--text); font-family: var(--font);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow);
+}
+.skin .bar { background: var(--brand); color: #fff; padding: 6px 9px; border-radius: var(--btn-radius); font-size: 12.5px; }
+.skin .body { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+              padding: 9px; margin-top: 8px; font-size: 13px; }
+.skin .sbtn { display: inline-block; background: var(--brand); color: #fff; padding: 5px 12px;
+              border-radius: var(--btn-radius); font-size: 12.5px; margin-top: 8px; }
+
+table.matrix td, table.matrix th { text-align: center; }
+table.matrix td.cell { cursor: pointer; }
+table.matrix td.cell:hover { background: rgba(26,77,143,.08); }
+
+details.viva { border: 1px solid var(--border); border-radius: var(--btn-radius); padding: 9px 12px;
+               margin-bottom: 8px; background: var(--card); }
+details.viva summary { cursor: pointer; font-weight: bold; font-size: 14px; }
+details.viva p { font-size: 14px; margin-top: 7px; }
+
+.flow-steps { counter-reset: step; list-style: none; margin: 6px 0; }
+.flow-steps li { counter-increment: step; position: relative; padding: 7px 0 7px 38px;
+                 border-bottom: 1px dashed var(--border); font-size: 14px; }
+.flow-steps li::before { content: counter(step); position: absolute; left: 0; top: 6px; width: 26px; height: 26px;
+                         border-radius: 50%; background: var(--brand); color: #fff; font-size: 12px;
+                         font-weight: bold; display: flex; align-items: center; justify-content: center; }
+
+/* ---------- tests page ---------- */
+.test-line { font-family: Consolas, monospace; font-size: 12.5px; padding: 2px 0; }
+.test-line.pass { color: #1c7a3c; }
+.test-line.fail { color: #b32d2d; font-weight: bold; }
+.test-sec { font-weight: bold; margin-top: 10px; color: var(--brand); }
+
+/* ---------- print (lab record) ---------- */
+@media print {
+  body { background: #fff !important; color: #000; font-size: 12px; }
+  #site-header, .subnav, .demo-bar, .btn, .no-print, footer, .toast, .warnbar { display: none !important; }
+  .wrap { max-width: none; margin: 0; padding: 0; }
+  .card { box-shadow: none; border: 1px solid #999; break-inside: auto; }
+  .exp { break-before: page; }
+  .pblock, .uml-wrap, details.viva { break-inside: avoid; }
+  details.viva > *:not(summary) { display: block !important; }
+  pre.code { max-height: none; white-space: pre-wrap; }
+  .console { max-height: none; }
+  a { color: #000; text-decoration: none; }
+}
+.demo-bar input[type=checkbox] { min-width: 0; width: auto; }

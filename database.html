@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Database</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Database <span class="hint">(Experiment 4 &mdash; Database Connectivity)</span></h2>
+    <p class="sub" id="dbIntro"></p>
+    <div class="grid4" id="tableStats"></div>
+  </div>
+
+  <div class="card">
+    <h2>ER Diagram</h2>
+    <p class="sub">Ye diagram <code>js/schema.js</code> se apne aap banta hai &mdash; wahi file jisse
+      <code>server.py</code> SQLite me <code>CREATE TABLE</code> karta hai.</p>
+    <div class="uml-wrap" id="erDiagram"></div>
+  </div>
+
+  <div class="card" id="sqlCard">
+    <h2>SQL Console <span class="hint">(read-only)</span></h2>
+    <p class="sub">
+      Asli SQL query likho aur SQLite par chalao. Console read-only connection par chalta hai &mdash;
+      <code>DELETE</code> / <code>UPDATE</code> / <code>DROP</code> reject ho jaate hain.
+    </p>
+    <div class="demo-bar" id="samples"></div>
+    <textarea id="sqlBox" rows="4" spellcheck="false"
+      style="font-family:Consolas,monospace;font-size:13px;margin-top:10px">SELECT txn_id, acc_no, txn_type, amount, balance_after, approved_by FROM transactions ORDER BY id DESC LIMIT 10</textarea>
+    <div class="demo-bar">
+      <button class="btn" onclick="runSql()">Run Query</button>
+      <span class="hint" id="sqlInfo"></span>
+    </div>
+    <div class="table-wrap" id="sqlResult"></div>
+  </div>
+
+  <div class="card" id="logCard">
+    <h2>Live SQL Log</h2>
+    <p class="sub">
+      Website jo bhi INSERT / UPDATE / DELETE karti hai wo yahan turant dikhta hai. Doosre tab me koi
+      transaction karo aur yahan dekho. (Server ki black window me bhi yahi print hota hai.)
+    </p>
+    <label class="check"><input type="checkbox" id="showReads"> SELECT queries bhi dikhao</label>
+    <div class="console" id="sqlLog" style="max-height:340px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Table Browser</h2>
+    <div class="demo-bar">
+      <select id="tablePick" onchange="loadTable()"></select>
+      <span class="hint" id="tableInfo"></span>
+    </div>
+    <div class="table-wrap" id="tableView"></div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/schema.js"></script>
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script src="js/uml.js"></script>
+<script src="js/diagrams.js"></script>
+<script>
+const db = DatabaseConnection.getInstance();
+
+const SAMPLES = [
+  ["Latest transactions",
+   "SELECT txn_id, acc_no, txn_type, amount, balance_after, approved_by FROM transactions ORDER BY id DESC LIMIT 10"],
+  ["Balance per customer (JOIN)",
+   "SELECT u.full_name, COUNT(a.id) AS accounts, SUM(a.balance) AS total_balance\nFROM users u JOIN accounts a ON a.user_id = u.id\nGROUP BY u.id ORDER BY total_balance DESC"],
+  ["Who approved what (GROUP BY)",
+   "SELECT approved_by, COUNT(*) AS txns, SUM(amount) AS total\nFROM transactions WHERE status = 'APPROVED'\nGROUP BY approved_by ORDER BY txns DESC"],
+  ["Alerts per channel",
+   "SELECT channel, COUNT(*) AS sent, SUM(is_read) AS read_count FROM notifications GROUP BY channel"],
+  ["Rejected attempts",
+   "SELECT txn_id, acc_no, txn_type, amount, remark FROM transactions WHERE status = 'REJECTED' ORDER BY id DESC"],
+  ["Proxy denials",
+   "SELECT l.id, l.acc_no, u.full_name AS tried_by, l.operation, l.reason\nFROM access_log l JOIN users u ON u.id = l.user_id\nWHERE l.is_allowed = 0 ORDER BY l.id DESC"],
+  ["Table structure",
+   "PRAGMA table_info(transactions)"]
+];
+
+if (requireStaff()) {
+  renderHeader("database.html");
+  init();
+}
+
+function init() {
+  const sqlite = db.isSQLite();
+  $("dbIntro").innerHTML = sqlite
+    ? "Website abhi asli <b>SQLite</b> database se judi hai: <code>" + esc(db.serverInfo.file) + "</code> " +
+      "(SQLite " + esc(db.serverInfo.sqlite) + ", Python " + esc(db.serverInfo.python) + "). " +
+      "Is file ko <i>DB Browser for SQLite</i> se bhi khol sakte ho."
+    : "Abhi server ke bina chal raha hai, isliye data <b>browser storage</b> me hai. " +
+      "Asli SQLite database, SQL console aur live log ke liye <code>start.bat</code> double-click karo " +
+      "(ya <code>python server.py</code>).";
+
+  $("tableStats").innerHTML = db.tables.map(t =>
+    '<div class="stat"><div class="k">' + esc(t) + '</div><div class="v">' + db.count(t) + "</div></div>").join("");
+
+  UML.draw($("erDiagram"), erDiagramSpec());
+
+  $("tablePick").innerHTML = db.tables.map(t => "<option>" + esc(t) + "</option>").join("");
+  loadTable();
+
+  if (!sqlite) {
+    $("sqlCard").innerHTML += '<div class="note">SQL console sirf server mode me chalta hai.</div>';
+    $("sqlCard").querySelectorAll("textarea, .btn").forEach(e => e.disabled = true);
+    $("logCard").style.display = "none";
+    return;
+  }
+
+  $("samples").innerHTML = SAMPLES.map((s, i) =>
+    '<button class="btn small grey" onclick="pickSample(' + i + ')">' + esc(s[0]) + "</button>").join("");
+  runSql();
+  pollLog();
+}
+
+function pickSample(i) {
+  $("sqlBox").value = SAMPLES[i][1];
+  runSql();
+}
+
+async function runSql() {
+  const sql = $("sqlBox").value;
+  $("sqlInfo").textContent = "chal raha hai...";
+  try {
+    const res = await fetch("api/sql", { method: "POST", headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ sql: sql }) }).then(r => r.json());
+    if (!res.ok) {
+      $("sqlInfo").textContent = "";
+      $("sqlResult").innerHTML = '<div class="result bad">' + esc(res.error) + "</div>";
+      return;
+    }
+    $("sqlInfo").textContent = res.rows.length + " row(s) in " + res.ms + " ms" + (res.truncated ? " (pehli 500)" : "");
+    $("sqlResult").innerHTML = "<table><thead><tr>" + res.columns.map(c => "<th>" + esc(c) + "</th>").join("") +
+      "</tr></thead><tbody>" + (res.rows.length === 0
+        ? '<tr><td colspan="' + res.columns.length + '" class="empty">Koi row nahi</td></tr>'
+        : res.rows.map(r => "<tr>" + r.map(v => "<td>" + esc(v === null ? "NULL" : v) + "</td>").join("") + "</tr>").join("")) +
+      "</tbody></table>";
+  } catch (e) {
+    $("sqlInfo").textContent = "";
+    $("sqlResult").innerHTML = '<div class="result bad">Server se jawab nahi aaya: ' + esc(e.message) + "</div>";
+  }
+}
+
+let lastLogId = 0;
+async function pollLog() {
+  try {
+    const res = await fetch("api/sql-log?since=" + lastLogId).then(r => r.json());
+    const box = $("sqlLog");
+    const showReads = $("showReads").checked;
+    for (const e of res.entries) {
+      lastLogId = Math.max(lastLogId, e.id);
+      if (e.kind === "read" && !showReads) continue;
+      const line = document.createElement("div");
+      line.className = e.kind === "write" ? "sql" : e.kind === "console" ? "info" : "";
+      line.textContent = e.time + "  " + e.sql;
+      box.appendChild(line);
+    }
+    while (box.childNodes.length > 200) box.removeChild(box.firstChild);
+    if (res.entries.length) box.scrollTop = box.scrollHeight;
+  } catch (e) { /* server band ho gaya - chupchaap dobara try */ }
+  setTimeout(pollLog, 1500);
+}
+
+function loadTable() {
+  const t = $("tablePick").value;
+  const rows = db.selectAll(t).reverse().slice(0, 50);
+  const cols = ["id"].concat(DB_SCHEMA.tables[t].columns.map(c => c[0]));
+  $("tableInfo").textContent = "latest " + rows.length + " of " + db.count(t) + " rows (JS keys; SQL column naam ER diagram me)";
+  $("tableView").innerHTML = "<table><thead><tr>" + cols.map(c => "<th>" + esc(c) + "</th>").join("") +
+    "</tr></thead><tbody>" + rows.map(r => "<tr>" + cols.map(c => {
+      let v = r[c];
+      if (c === "password") v = String(v).slice(0, 16) + "...";
+      if (typeof v === "object" && v !== null) v = JSON.stringify(v);
+      return "<td>" + esc(v === undefined ? "" : v) + "</td>";
+    }).join("") + "</tr>").join("") + "</tbody></table>";
+}
+</script>
+</body>
+</html>

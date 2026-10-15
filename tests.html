@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Test Suite</title>
+<link rel="stylesheet" href="css/style.css">
+<!-- test mode: alag database (sbtest_ / smartbank_test.db), asli demo data ko kuch nahi hota -->
+<script>window.SB_TEST_MODE = true;</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="logo">SB</span>
+    <div><b>SmartBank</b> <span id="badge"></span><div class="tagline">Automated Test Suite</div></div></div>
+  <div class="topbar-right"><a href="patterns.html"><button class="btn small ghost">DP Lab</button></a>
+    <a href="index.html"><button class="btn small ghost">Login</button></a></div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h2>Automated Test Suite</h2>
+    <p class="sub">
+      Ye wahi <code>tests/suite.js</code> hai jo terminal me <code>node tests/run-node.js</code> se chalta hai.
+      Har pattern, har business rule, aur har account ka balance uski entries ke jod se match hona
+      (ledger check) &mdash; sab yahan check hota hai. Tests ek alag <b>test database</b> par chalte hain,
+      isliye demo ka data safe rehta hai.
+    </p>
+    <div class="grid4" id="summary"></div>
+    <button class="btn" id="runBtn" onclick="runAll()">Run all tests</button>
+    <label class="check" style="display:inline-flex;margin-left:12px"><input type="checkbox" id="onlyFail"> sirf fail dikhao</label>
+  </div>
+
+  <div class="card">
+    <h2>Results</h2>
+    <div id="results"><p class="empty">"Run all tests" dabao.</p></div>
+  </div>
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+
+<script src="js/schema.js"></script>
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script src="tests/suite.js"></script>
+<script>
+$("badge").innerHTML = dbBadge();
+
+function box(k, v) { return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + "</div></div>"; }
+
+function runAll() {
+  $("runBtn").disabled = true;
+  $("results").innerHTML = '<p class="empty">Chal raha hai...</p>';
+
+  // UI ko pehle "chal raha hai" dikhane do, phir tests
+  setTimeout(function () {
+    const lines = [];
+    let pass = 0, fail = 0;
+    const t0 = performance.now();
+    const T = {
+      section: n => lines.push('<div class="test-sec">' + esc(n) + "</div>"),
+      log:     m => lines.push('<div class="test-line hint">' + esc(m) + "</div>"),
+      check:   (label, ok, detail) => {
+        if (ok) pass++; else fail++;
+        lines.push('<div class="test-line ' + (ok ? "pass" : "fail") + '">' + (ok ? "PASS  " : "FAIL  ") +
+                   esc(label) + (!ok && detail ? "<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + esc(detail) : "") + "</div>");
+      }
+    };
+    try {
+      runSmartBankSuite(T);
+    } catch (e) {
+      fail++;
+      lines.push('<div class="test-line fail">CRASH: ' + esc(e.stack || e.message) + "</div>");
+    }
+    const ms = Math.round(performance.now() - t0);
+
+    $("summary").innerHTML = box("Passed", '<span style="color:#1c7a3c">' + pass + "</span>") +
+                             box("Failed", '<span style="color:' + (fail ? "#b32d2d" : "inherit") + '">' + fail + "</span>") +
+                             box("Time", ms + " ms") +
+                             box("Database", DatabaseConnection.getInstance().isSQLite() ? "SQLite (test db)" : "Browser (test)");
+    $("results").innerHTML = lines.join("");
+    applyFilter();
+    $("runBtn").disabled = false;
+    document.title = (fail ? "FAIL " : "PASS ") + pass + "/" + (pass + fail) + " - SmartBank tests";
+  }, 30);
+}
+
+function applyFilter() {
+  const only = $("onlyFail").checked;
+  document.querySelectorAll("#results .test-line.pass, #results .test-sec, #results .hint").forEach(el => {
+    el.style.display = only ? "none" : "";
+  });
+}
+$("onlyFail").onchange = applyFilter;
+</script>
+</body>
+</html>
