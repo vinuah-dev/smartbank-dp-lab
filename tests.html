@@ -28,6 +28,7 @@
     </p>
     <div class="grid4" id="summary"></div>
     <button class="btn" id="runBtn" onclick="runAll()">Run all tests</button>
+    <button class="btn grey" id="uiBtn" onclick="runUi()" style="display:none">UI click-through test</button>
     <label class="check" style="display:inline-flex;margin-left:12px"><input type="checkbox" id="onlyFail"> sirf fail dikhao</label>
   </div>
 
@@ -104,6 +105,30 @@ function applyFilter() {
   });
 }
 $("onlyFail").onchange = applyFilter;
+
+// UI test: har page ko iframe me khol kar asli forms bharta aur buttons dabata hai.
+// Ye DEMO data par chalta hai (thoda data badal jaata hai), isliye sirf server mode me.
+if (DatabaseConnection.getInstance().isSQLite()) $("uiBtn").style.display = "";
+
+async function runUi() {
+  if (!confirm("UI test demo data par chalega (kuch transactions ban jaayengi). Chalaaye?")) return;
+  $("uiBtn").disabled = true;
+  $("results").innerHTML = '<p class="empty">Pages khul rahe hain, forms bhare ja rahe hain... (15-20 sec)</p>';
+  try {
+    const src  = await (await fetch("tests/e2e-ui.js", { cache: "no-store" })).text();
+    const out  = await eval(src);
+    const head = out.split("\n")[0];
+    const body = out.split("\n---\n")[1] || "";
+    $("summary").innerHTML = box("UI checks", esc(head));
+    $("results").innerHTML = '<div class="test-sec">UI click-through</div>' +
+      body.split("\n").map(l => '<div class="test-line ' + (l.startsWith("PASS") ? "pass" : "fail") + '">' +
+                                 esc(l) + "</div>").join("");
+    document.title = head + " - SmartBank UI test";
+  } catch (e) {
+    $("results").innerHTML = '<div class="test-line fail">' + esc(e.stack || e.message) + "</div>";
+  }
+  $("uiBtn").disabled = false;
+}
 </script>
 </body>
 </html>

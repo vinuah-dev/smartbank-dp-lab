@@ -419,7 +419,12 @@ class SmartBankHandler(SimpleHTTPRequestHandler):
                 return
 
             if url.path == "/api/sql":
-                result = db.readonly_query(body.get("sql"))
+                # galat / write query user ki galti hai, server ki nahi - isliye 200 + ok:false
+                try:
+                    result = db.readonly_query(body.get("sql"))
+                except (ValueError, sqlite3.Error) as err:
+                    self.send_json({"ok": False, "error": str(err)})
+                    return
                 self.send_json(dict({"ok": True}, **result))
                 return
 
