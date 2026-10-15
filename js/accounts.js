@@ -80,11 +80,21 @@ class AccountFactory {
 
   // sab factories ke liye common process
   openAccount(userId, openingBalance) {
-    const db    = DatabaseConnection.getInstance();
-    const accNo = "SB" + (100000 + db.count("accounts") * 7 +
-                          Math.floor(Math.random() * 90000));
+    const db = DatabaseConnection.getInstance();
 
-    const account = this.createAccount(accNo, userId, openingBalance);
+    openingBalance = Number(openingBalance);
+    if (!isFinite(openingBalance) || openingBalance < 0 || openingBalance > 10000000) {
+      return { ok: false, error: "Opening amount Rs. 0 se Rs. 1,00,00,000 ke beech hona chahiye." };
+    }
+
+    // account number unique hona chahiye
+    const taken = db.selectAll("accounts").map(a => a.accNo);
+    let accNo;
+    do {
+      accNo = "SB" + (100000 + Math.floor(Math.random() * 900000));
+    } while (taken.indexOf(accNo) !== -1);
+
+    const account = this.createAccount(accNo, userId, openingBalance);   // FACTORY METHOD
 
     if (openingBalance < account.getMinBalance()) {
       return {
@@ -95,6 +105,25 @@ class AccountFactory {
     }
 
     db.insert("accounts", account.toRow());
+
+    // pehla deposit bhi statement me dikhna chahiye
+    db.insert("transactions", {
+      txnId: newTxnId(), accNo: accNo, userId: userId,
+      type: "Account Opening", direction: "credit",
+      amount: openingBalance, fee: 0, balance: openingBalance,
+      mode: "Branch", status: "APPROVED", approvedBy: "System",
+      remark: account.getType() + " account khola gaya", reversed: false,
+      time: new Date().toLocaleString(), ts: new Date().toISOString()
+    });
+
+    db.insert("notifications", {
+      userId: userId, channel: "Push", target: "SmartBank App",
+      title: "Welcome to SmartBank!",
+      message: "Aapka " + account.getType() + " account " + accNo +
+               " khul gaya hai. Opening balance Rs. " + money(openingBalance) + ".",
+      read: false, time: new Date().toLocaleString()
+    });
+
     return { ok: true, account: account };
   }
 }

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -16,6 +16,7 @@
     <div class="label">AVAILABLE BALANCE</div>
     <div class="amount" id="balAmount">Rs. 0</div>
     <div class="meta" id="balMeta"></div>
+    <div class="meta" id="limitInfo" style="margin-top:6px"></div>
   </div>
 
   <div class="grid2">
@@ -99,6 +100,7 @@
 <footer>SmartBank &mdash; Design Patterns Lab Project</footer>
 <div id="toast" class="toast"></div>
 
+<script src="js/schema.js"></script>
 <script src="js/core.js"></script>
 <script src="js/accounts.js"></script>
 <script src="js/state.js"></script>
@@ -114,7 +116,7 @@
 <script src="js/facade.js"></script>
 <script src="js/app.js"></script>
 <script>
-if (requireLogin()) {
+if (requireCustomer()) {
   renderHeader("banking.html");
   showBalance();
   showUndo();
@@ -126,10 +128,14 @@ function showBalance() {
   const state  = getAccountState(acc.status);
 
   $("balAmount").textContent = "Rs. " + money(acc.balance);
-  $("balMeta").innerHTML     = acc.type + " Account  |  " + acc.accNo +
-                               "  |  Daily limit Rs. " + money(acc.dailyLimit) +
+  const used = debitedToday(acc.accNo);
+  $("balMeta").innerHTML     = esc(acc.type) + " Account  |  " + esc(acc.accNo) +
                                '  |  <span class="pill ' + state.getColor() + '">' +
                                state.getName() + "</span>";
+  $("limitInfo").innerHTML   = acc.dailyLimit === 0
+    ? "Fixed Deposit se paisa nahi nikalta."
+    : "Aaj ki daily limit: Rs. " + money(acc.dailyLimit) + " &nbsp;|&nbsp; Aaj use hua: Rs. " + money(used) +
+      " &nbsp;|&nbsp; <b>Baaki: Rs. " + money(Math.max(0, acc.dailyLimit - used)) + "</b>";
 }
 
 function doDeposit() {
@@ -171,15 +177,16 @@ function doUndo() {
   if (result.ok) {
     $("result").innerHTML =
       '<div class="result ok"><b>Undo Successful</b><br>' +
-      result.label + ' reverse kar di gayi.<br>' +
-      'Reversal ref: ' + result.refId +
+      esc(result.label) + ' reverse kar di gayi' +
+      (result.reversedCount > 1 ? ' (saath me judi hui cashback / transfer entry bhi)' : '') + '.<br>' +
+      'Reversal ref: ' + esc(result.refId) +
       ' &nbsp;|&nbsp; New Balance: Rs. ' + money(result.balance) + '</div>' +
       '<p class="sub" style="margin-top:10px">Command pattern ke undo() ne balance wapas ' +
       'theek kiya, original row par REVERSED ka nishaan lagaya aur ek reversal entry banayi.</p>';
     toast("Last transaction undo ho gayi");
   } else {
     $("result").innerHTML = '<div class="result bad"><b>Undo nahi ho saka</b><br>' +
-                            result.error + '</div>';
+                            esc(result.error) + '</div>';
     toast(result.error, "bad");
   }
 
@@ -191,7 +198,7 @@ function doUndo() {
 function showUndo() {
   const entry = BankingFacade.getInstance().canUndo();
   $("undoBox").innerHTML = entry
-    ? 'Last transaction: <b>' + entry.label + '</b> (' + entry.time + ')' +
+    ? 'Last transaction: <b>' + esc(entry.label) + '</b> (' + esc(entry.time) + ')' +
       '<br><button class="btn red" onclick="doUndo()">Undo Last Transaction</button>'
     : '<span class="hint">Abhi undo karne ke liye koi transaction nahi hai.</span>';
 }

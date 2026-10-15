@@ -17,16 +17,19 @@
     <p class="sub">
       Ye page sirf bank staff ke liye hai. Customer ka login yahan aa hi nahi sakta
       &mdash; <code>requireStaff()</code> use wapas dashboard bhej deta hai.
+      Database ke andar dekhne ke liye <a href="database.html">Database page</a> kholo.
     </p>
-    <div class="grid3" id="stats"></div>
+    <div class="grid4" id="stats"></div>
   </div>
+
+  <div id="adminMsg"></div>
 
   <div class="card">
     <h2>All Accounts <span class="hint">(State pattern &mdash; freeze / close)</span></h2>
     <p class="sub">
       Account ka status badalte hi uska behaviour badal jaata hai. Frozen account me
       paisa aa sakta hai lekin ja nahi sakta, Closed account me kuch bhi nahi hota.
-      Ye rule <code>js/state.js</code> ki classes me hai, if-else me nahi.
+      Close karne par bacha hua balance customer ko de diya jaata hai aur uski entry banti hai.
     </p>
     <div class="table-wrap">
       <table>
@@ -35,21 +38,24 @@
         <tbody id="accBody"></tbody>
       </table>
     </div>
-    <div id="adminMsg"></div>
   </div>
 
   <div class="card">
     <h2>All Transactions <span class="hint">(Command pattern &mdash; reverse)</span></h2>
     <p class="sub">
-      Poore bank ki transactions. Kisi bhi entry ko reverse kiya ja sakta hai &mdash;
-      balance wapas theek hota hai, original row par REVERSED lagta hai aur ek nayi
-      reversal entry banti hai. Customer ko alert bhi chala jaata hai.
+      Poore bank ki transactions. Reverse karne par balance wapas theek hota hai, original
+      row par REVERSED lagta hai aur nayi reversal entry banti hai. Transfer reverse karo to
+      paane wale ka paisa bhi wapas aata hai, aur cashback bhi wapas jaata hai.
     </p>
 
-    <div class="grid3">
+    <div class="grid4">
       <div>
         <label for="fAcc">Account</label>
         <select id="fAcc" onchange="loadTxns()"></select>
+      </div>
+      <div>
+        <label for="fType">Type</label>
+        <select id="fType" onchange="loadTxns()"></select>
       </div>
       <div>
         <label for="fStatus">Status</label>
@@ -80,14 +86,14 @@
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Mobile</th>
-                   <th>Accounts</th><th class="num">Total Balance</th></tr></thead>
+                   <th>Accounts</th><th class="num">Total Balance</th><th>Login</th></tr></thead>
         <tbody id="userBody"></tbody>
       </table>
     </div>
   </div>
 
   <div class="card">
-    <h2>Access Log <span class="hint">(Proxy pattern &mdash; poore bank ka)</span></h2>
+    <h2>Access Log <span class="hint">(Proxy pattern &mdash; poore bank ka, latest 25)</span></h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>#</th><th>Account</th><th>User</th><th>Operation</th>
@@ -99,9 +105,12 @@
 
   <div class="card">
     <h2>Maintenance</h2>
-    <p class="sub">Mahine ke aakhir me add-on services ki fee kaatne ka kaam.</p>
+    <p class="sub">
+      Mahine ke aakhir me add-on services (Decorator) ki fee kaatne ka kaam. Frozen ya
+      closed accounts skip ho jaate hain kyunki unse paisa nahi nikal sakta.
+    </p>
     <button class="btn" onclick="chargeFees()">Charge Monthly Fees (all accounts)</button>
-    <button class="btn red" onclick="resetAll()">Reset Database</button>
+    <button class="btn red" onclick="resetAll()">Reset Database (fresh demo data)</button>
     <div id="maintMsg"></div>
   </div>
 
@@ -110,6 +119,7 @@
 <footer>SmartBank &mdash; Design Patterns Lab Project</footer>
 <div id="toast" class="toast"></div>
 
+<script src="js/schema.js"></script>
 <script src="js/core.js"></script>
 <script src="js/accounts.js"></script>
 <script src="js/state.js"></script>
@@ -130,28 +140,37 @@ const facade = BankingFacade.getInstance();
 
 if (requireStaff()) {
   renderHeader("admin.html");
+  fillFilters();
+  refreshAll();
+}
+
+function refreshAll() {
   loadStats();
   loadAccountsTable();
-  fillAccountFilter();
   loadTxns();
   loadUsers();
   loadAccessLog();
 }
 
+function message(html, bad) {
+  $("adminMsg").innerHTML = '<div class="result ' + (bad ? "bad" : "ok") + '" style="margin-bottom:18px">' +
+                            html + "</div>";
+}
+
 function loadStats() {
   const s = facade.bankStats();
   const boxes = [
-    ["Customers",     s.users - 1],
+    ["Customers",     s.customers],
     ["Accounts",      s.accounts],
     ["Transactions",  s.transactions],
     ["Money in Bank", "Rs. " + money(s.totalMoney)],
     ["Alerts Sent",   s.notifications],
     ["Access Logs",   s.accessLogs],
-    ["Commands Run",  s.commands],
-    ["DB Queries",    s.queries]
+    ["Undo History",  s.commands],
+    ["Database",      db.isSQLite() ? "SQLite" : "Browser"]
   ];
   $("stats").innerHTML = boxes.map(b =>
-    '<div class="stat"><div class="k">' + b[0] + '</div><div class="v">' + b[1] + "</div></div>"
+    '<div class="stat"><div class="k">' + b[0] + '</div><div class="v">' + esc(b[1]) + "</div></div>"
   ).join("");
 }
 
@@ -161,98 +180,88 @@ function loadAccountsTable() {
   $("accBody").innerHTML = rows.map(function (a) {
     const user  = db.selectOne("users", u => u.id === a.userId);
     const state = getAccountState(a.status);
-    const deco  = decorateAccount(a);
-    const feats = deco.getFeatureNames();
+    const feats = decorateAccount(a).getFeatureNames();
+    const acc   = esc(a.accNo);
 
     let actions = "";
-    if (a.status !== "Frozen") {
-      actions += '<button class="btn small red" onclick="setStatus(\'' + a.accNo +
-                 '\',\'Frozen\')">Freeze</button> ';
-    }
-    if (a.status !== "Active") {
-      actions += '<button class="btn small" onclick="setStatus(\'' + a.accNo +
-                 '\',\'Active\')">Activate</button> ';
-    }
     if (a.status === "Active") {
-      actions += '<button class="btn small grey" onclick="setStatus(\'' + a.accNo +
-                 '\',\'Closed\')">Close</button>';
+      actions += '<button class="btn small red" onclick="setStatus(\'' + acc + '\',\'Frozen\')">Freeze</button> ' +
+                 '<button class="btn small grey" onclick="setStatus(\'' + acc + '\',\'Closed\')">Close</button>';
+    } else {
+      actions += '<button class="btn small" onclick="setStatus(\'' + acc + '\',\'Active\')">Activate</button>';
     }
 
     return "<tr>" +
-      "<td>" + a.accNo + "</td>" +
-      "<td>" + (user ? user.name : "-") + "</td>" +
-      "<td>" + a.type + "</td>" +
-      '<td class="num">Rs. ' + money(a.balance) + "</td>" +
-      "<td>" + (feats.length ? feats.join(", ") : '<span class="hint">none</span>') + "</td>" +
+      "<td>" + acc + "</td>" +
+      "<td>" + esc(user ? user.name : "-") + "</td>" +
+      "<td>" + esc(a.type) + "</td>" +
+      '<td class="num' + (a.balance < 0 ? " dr" : "") + '">Rs. ' + money(a.balance) + "</td>" +
+      "<td>" + (feats.length ? esc(feats.join(", ")) : '<span class="hint">none</span>') + "</td>" +
       '<td><span class="pill ' + state.getColor() + '">' + state.getName() + "</span></td>" +
-      "<td>" + actions + "</td>" +
+      '<td class="nowrap">' + actions + "</td>" +
     "</tr>";
   }).join("");
 }
 
 function setStatus(accNo, status) {
-  const res = facade.setStatus(accNo, status);
+  if (status === "Closed" &&
+      !confirm(accNo + " band karna hai? Bacha hua balance customer ko de diya jaayega.")) return;
 
+  const res = facade.setStatus(accNo, status);
   if (!res.ok) {
-    $("adminMsg").innerHTML = '<div class="result bad">' + res.error + "</div>";
+    message(esc(res.error), true);
     return toast(res.error, "bad");
   }
 
-  $("adminMsg").innerHTML =
-    '<div class="result ok"><b>' + accNo + " ab " + res.status + " hai</b><br>" +
-    res.note + "</div>";
-
-  loadAccountsTable();
+  message("<b>" + esc(accNo) + " ab " + esc(res.status) + " hai</b><br>" + esc(res.note) +
+          (res.payout > 0 ? "<br>Customer ko Rs. " + money(res.payout) + " de diye gaye (Closure Payout entry bani)." : ""));
+  refreshAll();
   toast(accNo + " -> " + status);
 }
 
-function fillAccountFilter() {
-  const rows = db.selectAll("accounts");
+function fillFilters() {
   $("fAcc").innerHTML = '<option value="">All accounts</option>' +
-    rows.map(a => '<option value="' + a.accNo + '">' + a.accNo + " - " + a.type + "</option>").join("");
+    db.selectAll("accounts").map(a =>
+      '<option value="' + esc(a.accNo) + '">' + esc(a.accNo) + " - " + esc(a.type) + "</option>").join("");
+
+  const types = Array.from(new Set(db.selectAll("transactions").map(t => t.type))).sort();
+  $("fType").innerHTML = '<option value="">All</option>' +
+    types.map(t => "<option>" + esc(t) + "</option>").join("");
 }
 
 function currentTxns() {
   let rows = db.selectAll("transactions");
-  const acc = $("fAcc").value;
-  const st  = $("fStatus").value;
-
-  if (acc) rows = rows.filter(t => t.accNo === acc);
-  if (st)  rows = rows.filter(t => t.status === st);
-
+  const acc = $("fAcc").value, type = $("fType").value, st = $("fStatus").value;
+  if (acc)  rows = rows.filter(t => t.accNo === acc);
+  if (type) rows = rows.filter(t => t.type === type);
+  if (st)   rows = rows.filter(t => t.status === st);
   return rows.reverse();
 }
 
 function loadTxns() {
   const rows = currentTxns();
-  const body = $("txnBody");
-
-  if (rows.length === 0) {
-    body.innerHTML = '<tr><td colspan="12" class="empty">Koi transaction nahi mili.</td></tr>';
-  } else {
-    body.innerHTML = rows.map(t => txnRowHtml(t, { showAccount: true, actions: true })).join("");
-  }
-  $("txnCount").textContent = rows.length + " transaction(s).";
+  $("txnBody").innerHTML = rows.length === 0
+    ? '<tr><td colspan="12" class="empty">Koi transaction nahi mili.</td></tr>'
+    : rows.slice(0, 200).map(t => txnRowHtml(t, { showAccount: true, actions: true })).join("");
+  $("txnCount").textContent = rows.length + " transaction(s)" + (rows.length > 200 ? " - latest 200 dikha rahe hain" : ".");
 }
 
 function doReverse(txnRowId) {
-  if (!confirm("Ye transaction reverse karni hai? Balance wapas ho jaayega.")) return;
+  const row = db.selectOne("transactions", t => t.id === txnRowId);
+  if (!row || !confirm(row.txnId + " (" + row.type + ", Rs. " + money(row.amount) + ") reverse karni hai?")) return;
 
   const res = facade.reverse(txnRowId);
-
   if (!res.ok) {
-    $("adminMsg").innerHTML = '<div class="result bad">' + res.error + "</div>";
+    message(esc(res.error), true);
     return toast(res.error, "bad");
   }
 
-  $("adminMsg").innerHTML =
-    '<div class="result ok"><b>Transaction reverse ho gayi</b><br>' +
-    "Reversal ref: " + res.refId + " &nbsp;|&nbsp; Naya balance Rs. " + money(res.balance) +
-    "<br>Customer ko alert bhi chala gaya (Observer).</div>";
-
-  loadStats();
-  loadAccountsTable();
-  loadTxns();
+  message("<b>Transaction reverse ho gayi</b><br>Reversal ref: " + esc(res.refId) +
+          " &nbsp;|&nbsp; " + res.reversedCount + " entry/entries ulti ki gayi" +
+          (res.reversedCount > 1 ? " (judi hui cashback / transfer-in bhi)" : "") +
+          "<br>Customer ko alert bhi chala gaya (Observer).");
+  fillFilters();
+  refreshAll();
   toast("Reverse ho gaya: " + res.refId);
 }
 
@@ -267,62 +276,68 @@ function loadUsers() {
   const users = db.select("users", u => u.role !== "staff");
 
   $("userBody").innerHTML = users.map(function (u) {
-    const accs  = db.select("accounts", a => a.userId === u.id);
-    const total = accs.reduce((s, a) => s + a.balance, 0);
+    const accs   = db.select("accounts", a => a.userId === u.id);
+    const total  = accs.reduce((s, a) => s + a.balance, 0);
+    const locked = u.lockedUntil && u.lockedUntil > Date.now();
     return "<tr>" +
-      "<td>" + u.id + "</td><td>" + u.name + "</td><td>" + u.email + "</td>" +
-      "<td>" + u.mobile + "</td><td>" + accs.map(a => a.accNo).join(", ") + "</td>" +
-      '<td class="num">Rs. ' + money(total) + "</td></tr>";
+      "<td>" + u.id + "</td><td>" + esc(u.name) + "</td><td>" + esc(u.email) + "</td>" +
+      "<td>" + esc(u.mobile) + "</td><td>" + esc(accs.map(a => a.accNo).join(", ")) + "</td>" +
+      '<td class="num">Rs. ' + money(total) + "</td>" +
+      "<td>" + (locked ? '<span class="pill red">Locked</span>'
+                       : (u.failedLogins ? '<span class="pill grey">' + u.failedLogins + " wrong</span>"
+                                         : '<span class="pill green">OK</span>')) + "</td></tr>";
   }).join("");
 }
 
 function loadAccessLog() {
-  const rows = db.selectAll("access_log").reverse().slice(0, 25);
+  const rows  = db.selectAll("access_log").reverse().slice(0, 25);
+  const users = db.selectAll("users");
 
   $("logBody").innerHTML = rows.map(function (l) {
-    const u = db.selectOne("users", x => x.id === l.userId);
-    return "<tr><td>" + l.id + "</td><td>" + l.accNo + "</td>" +
-      "<td>" + (u ? u.name : l.userId) + "</td><td>" + l.operation + "</td>" +
+    const u = users.find(x => x.id === l.userId);
+    return "<tr><td>" + l.id + "</td><td>" + esc(l.accNo) + "</td>" +
+      "<td>" + esc(u ? u.name : l.userId) + "</td><td>" + esc(l.operation) + "</td>" +
       '<td><span class="pill ' + (l.allowed ? "green" : "red") + '">' +
       (l.allowed ? "ALLOWED" : "DENIED") + "</span></td>" +
-      "<td>" + l.reason + "</td><td>" + l.time + "</td></tr>";
+      "<td>" + esc(l.reason) + "</td><td>" + esc(l.time) + "</td></tr>";
   }).join("");
 }
 
 function chargeFees() {
   const session = SessionManager.getInstance();
-  const staffId = session.getUser().id;
-  const channel = session.getChannel();
+  const saved   = session.snapshot();            // staff ka session yaad rakho
+  let charged = 0, total = 0;
+  const skipped = [];
 
-  let charged = 0, skipped = 0;
+  try {
+    for (const a of db.selectAll("accounts")) {
+      const fee = decorateAccount(a).getMonthlyFee();
+      if (fee <= 0) continue;
 
-  // staff har account par jaakar fee kaatta hai
-  for (const a of db.selectAll("accounts")) {
-    if (decorateAccount(a).getMonthlyFee() <= 0) { skipped++; continue; }
-
-    session.login(a.userId, a.accNo);          // us customer ke roop me
-    const res = facade.chargeMonthlyFee(a.accNo);
-    if (res.ok) charged++; else skipped++;
+      session.login(a.userId, a.accNo);         // us customer ke account par
+      const res = facade.chargeMonthlyFee(a.accNo);
+      if (res.ok) { charged++; total += fee; }
+      else skipped.push(a.accNo + " (" + (res.trail && res.trail.length
+                                             ? res.trail[res.trail.length - 1].action : res.error) + ")");
+    }
+  } finally {
+    session.restore(saved);                     // wapas staff
   }
-
-  session.login(staffId, null);                // wapas staff
-  session.setChannel(channel);
 
   $("maintMsg").innerHTML =
     '<div class="result ok"><b>Monthly fee run complete</b><br>' +
-    charged + " account(s) se fee kaati gayi, " + skipped + " skip hue.</div>";
+    charged + " account(s) se kul Rs. " + money(total) + " fee kaati gayi." +
+    (skipped.length ? "<br>Skip hue: " + esc(skipped.join("; ")) : "") + "</div>";
 
-  loadStats();
-  loadAccountsTable();
-  loadTxns();
+  fillFilters();
+  refreshAll();
   toast(charged + " accounts se fee kaati gayi");
 }
 
 function resetAll() {
-  if (!confirm("Poora database mit jaayega aur demo data wapas aa jaayega. Sure?")) return;
+  if (!confirm("Poora database mit jaayega aur fresh demo data wapas aa jaayega. Sure?")) return;
   db.dropDatabase();
-  Store.api.removeItem("sb_prefs");
-  window.location.href = "index.html";
+  go("index.html");
 }
 </script>
 </body>

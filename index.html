@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -11,7 +11,7 @@
 <div class="login-page">
   <div class="login-box">
     <h1>SmartBank</h1>
-    <p class="sub">Internet Banking Login</p>
+    <p class="sub">Internet Banking Login <span id="dbMode"></span></p>
 
     <div class="tabs">
       <button id="tabLogin" class="active" onclick="showTab('login')">Login</button>
@@ -19,37 +19,46 @@
     </div>
 
     <!-- ---------- LOGIN ---------- -->
-    <div id="loginForm">
+    <form id="loginForm" onsubmit="doLogin(); return false;">
       <label for="lEmail">Email</label>
-      <input type="email" id="lEmail" placeholder="ramesh@smartbank.in">
+      <input type="email" id="lEmail" placeholder="ramesh@smartbank.in" autocomplete="username" required>
 
       <label for="lPass">Password</label>
-      <input type="password" id="lPass" placeholder="1234">
+      <input type="password" id="lPass" placeholder="Password" autocomplete="current-password" required>
 
-      <button class="btn block" onclick="doLogin()">Login</button>
+      <button class="btn block" type="submit">Login</button>
 
       <div class="demo-box">
-        <b>Demo accounts</b><br>
-        ramesh@smartbank.in &nbsp;/&nbsp; 1234 &nbsp;(2 accounts)<br>
-        sneha@smartbank.in &nbsp;/&nbsp; 1234<br>
-        amit@smartbank.in &nbsp;/&nbsp; 1234<br>
-        <b>Bank staff:</b> manager@smartbank.in &nbsp;/&nbsp; admin
+        <b>Demo logins</b> <span class="hint">(click karke bhar do)</span><br>
+        <a href="#" onclick="fill('ramesh@smartbank.in','1234');return false;">ramesh@smartbank.in</a> / 1234 &nbsp;(2 accounts)<br>
+        <a href="#" onclick="fill('sneha@smartbank.in','1234');return false;">sneha@smartbank.in</a> / 1234<br>
+        <a href="#" onclick="fill('amit@smartbank.in','1234');return false;">amit@smartbank.in</a> / 1234<br>
+        <b>Bank staff:</b>
+        <a href="#" onclick="fill('manager@smartbank.in','admin');return false;">manager@smartbank.in</a> / admin
       </div>
-    </div>
+    </form>
 
     <!-- ---------- REGISTER ---------- -->
-    <div id="regForm" style="display:none">
+    <form id="regForm" style="display:none" onsubmit="doRegister(); return false;">
       <label for="rName">Full Name</label>
-      <input type="text" id="rName" placeholder="Your name">
+      <input type="text" id="rName" placeholder="Your name" maxlength="40" required>
 
       <label for="rEmail">Email</label>
-      <input type="email" id="rEmail" placeholder="you@example.com">
+      <input type="email" id="rEmail" placeholder="you@example.com" required>
 
       <label for="rMobile">Mobile</label>
-      <input type="text" id="rMobile" placeholder="+91-9000000000">
+      <input type="text" id="rMobile" placeholder="10 digit mobile number" maxlength="16" required>
 
-      <label for="rPass">Password</label>
-      <input type="password" id="rPass">
+      <div class="grid2" style="gap:10px">
+        <div>
+          <label for="rPass">Password</label>
+          <input type="password" id="rPass" autocomplete="new-password" required>
+        </div>
+        <div>
+          <label for="rPass2">Confirm Password</label>
+          <input type="password" id="rPass2" autocomplete="new-password" required>
+        </div>
+      </div>
 
       <label for="rType">Account Type</label>
       <select id="rType">
@@ -59,22 +68,28 @@
       </select>
 
       <label for="rOpen">Opening Deposit (Rs.)</label>
-      <input type="number" id="rOpen" value="5000">
+      <input type="number" id="rOpen" value="5000" min="0" step="1">
 
-      <button class="btn block" onclick="doRegister()">Open Account</button>
+      <button class="btn block" type="submit">Open Account</button>
 
       <div class="demo-box">
         Account <b>Factory Method</b> pattern se banta hai &ndash; type ke hisaab se
-        alag factory chalti hai aur uske rules apne aap lag jaate hain.
+        alag factory chalti hai aur uske rules apne aap lag jaate hain. Password
+        <b>SHA-256 + salt</b> ke saath hash hokar save hota hai.
       </div>
-    </div>
+    </form>
 
     <div id="msg" style="margin-top:12px"></div>
+
+    <p class="login-foot">
+      <a href="patterns.html">DP Lab &mdash; Design Patterns page (bina login)</a>
+    </p>
   </div>
 </div>
 
 <div id="toast" class="toast"></div>
 
+<script src="js/schema.js"></script>
 <script src="js/core.js"></script>
 <script src="js/accounts.js"></script>
 <script src="js/state.js"></script>
@@ -91,10 +106,11 @@
 <script src="js/app.js"></script>
 <script>
 seedDatabase();
+$("dbMode").innerHTML = dbBadge();
 
 // pehle se login hai to seedha andar bhej do
-if (SessionManager.getInstance().isLoggedIn()) {
-  window.location.href = isStaff() ? "admin.html" : "dashboard.html";
+if (SessionManager.getInstance().isLoggedIn() && SessionManager.getInstance().getUser()) {
+  go(isStaff() ? "admin.html" : "dashboard.html");
 }
 
 function showTab(which) {
@@ -107,69 +123,38 @@ function showTab(which) {
 }
 
 function say(text, bad) {
-  $("msg").innerHTML = '<div class="result ' + (bad ? "bad" : "ok") + '">' + text + '</div>';
+  $("msg").innerHTML = '<div class="result ' + (bad ? "bad" : "ok") + '">' + esc(text) + '</div>';
 }
 
+function fill(email, pass) {
+  showTab("login");
+  $("lEmail").value = email;
+  $("lPass").value  = pass;
+  $("lPass").focus();
+}
+
+// sab kaam FACADE ke through
 function doLogin() {
-  const db    = DatabaseConnection.getInstance();
-  const email = $("lEmail").value.trim().toLowerCase();
-  const pass  = $("lPass").value;
-
-  const user = db.selectOne("users", u => u.email.toLowerCase() === email);
-
-  if (user === null)          return say("Is email se koi account nahi mila.", true);
-  if (user.password !== pass) return say("Password galat hai.", true);
-
-  // bank staff ka apna console hai, uska koi account nahi hota
-  if (user.role === "staff") {
-    SessionManager.getInstance().login(user.id, null);
-    window.location.href = "admin.html";
-    return;
+  const res = BankingFacade.getInstance().login($("lEmail").value, $("lPass").value);
+  if (!res.ok) {
+    $("lPass").value = "";
+    return say(res.error, true);
   }
-
-  const acc = db.selectOne("accounts", a => a.userId === user.id);
-  if (acc === null) return say("Is user ka koi account nahi hai.", true);
-
-  SessionManager.getInstance().login(user.id, acc.accNo);
-  window.location.href = "dashboard.html";
+  go(res.page);
 }
 
 function doRegister() {
-  const db = DatabaseConnection.getInstance();
-
-  const name   = $("rName").value.trim();
-  const email  = $("rEmail").value.trim();
-  const mobile = $("rMobile").value.trim();
-  const pass   = $("rPass").value;
-  const type   = $("rType").value;
-  const open   = Number($("rOpen").value);
-
-  if (!name || !email || !mobile || !pass) return say("Saare fields bhariye.", true);
-
-  if (db.selectOne("users", u => u.email.toLowerCase() === email.toLowerCase())) {
-    return say("Ye email pehle se registered hai.", true);
-  }
-
-  // user banane se pehle hi rules check kar lo
-  const rules = getAccountRules(type);
-  if (open < rules.minBalance) {
-    return say(rules.type + " account ke liye kam se kam Rs. " +
-               money(rules.minBalance) + " chahiye.", true);
-  }
-
-  const user = db.insert("users", {
-    name: name, email: email, mobile: mobile, password: pass, role: "customer"
+  const res = BankingFacade.getInstance().register({
+    name:     $("rName").value,
+    email:    $("rEmail").value,
+    mobile:   $("rMobile").value,
+    password: $("rPass").value,
+    confirm:  $("rPass2").value,
+    type:     $("rType").value,
+    opening:  $("rOpen").value
   });
-
-  // ---- FACTORY METHOD ----
-  const made = getAccountFactory(type).openAccount(user.id, open);
-
-  if (!made.ok) {
-    return say(made.error, true);
-  }
-
-  SessionManager.getInstance().login(user.id, made.account.accNo);
-  window.location.href = "dashboard.html";
+  if (!res.ok) return say(res.error, true);
+  go(res.page);
 }
 </script>
 </body>

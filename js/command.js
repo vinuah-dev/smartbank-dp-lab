@@ -49,9 +49,22 @@ class TransactionCommand extends Command {
 
 
 /* ----------------------------------------------------------
-   Ek transaction row ko ulta karne wala kaam.
-   Isko invoker (undo) aur admin (reverse) dono use karte hain.
+   Transaction ko ulta karne wala kaam.
+   Isko invoker (customer ka undo) aur admin (reverse) dono use
+   karte hain.
+
+   Ek transaction ke saath judi hui "child" entries bhi hoti hain
+   (parentTxnId se) - jaise cashback, ya transfer me samne wale ke
+   account ki "Transfer In" entry. Parent reverse ho to children
+   bhi reverse hone chahiye, warna hisaab galat ho jaayega.
    ---------------------------------------------------------- */
+const NON_REVERSIBLE_TYPES = ["Reversal", "Account Opening", "Closure Payout"];
+
+function canReverseRow(t) {
+  return t.status === "APPROVED" && !t.reversed &&
+         NON_REVERSIBLE_TYPES.indexOf(t.type) === -1 && !t.parentTxnId;
+}
+
 function reverseTransactionRow(txnRow) {
   const db = DatabaseConnection.getInstance();
 
@@ -64,71 +77,85 @@ function reverseTransactionRow(txnRow) {
   if (txnRow.type === "Reversal") {
     return { ok: false, error: "Reversal ko dobara reverse nahi kar sakte." };
   }
-
-  const account = db.selectOne("accounts", a => a.accNo === txnRow.accNo);
-  if (account === null) {
-    return { ok: false, error: "Account nahi mila." };
+  if (NON_REVERSIBLE_TYPES.indexOf(txnRow.type) !== -1) {
+    return { ok: false, error: txnRow.type + " entry reverse nahi hoti." };
+  }
+  if (txnRow.parentTxnId) {
+    return { ok: false, error: "Ye entry " + txnRow.parentTxnId +
+                               " ka hissa hai - us transaction ko reverse karo." };
   }
 
-  const total = txnRow.amount + (txnRow.fee || 0);
+  // parent + uske saare children (jo abhi reverse nahi hue)
+  const rows = [txnRow].concat(
+    db.select("transactions", t => t.parentTxnId === txnRow.txnId &&
+                                   t.type !== "Reversal" && !t.reversed));
 
-  // agar transfer thi to samne wale ka paisa wapas lena hoga
-  let target = null;
-  if (txnRow.toAccount) {
-    target = db.selectOne("accounts", a => a.accNo === txnRow.toAccount);
-    if (target && txnRow.direction === "debit" && target.balance < txnRow.amount) {
+  // ---- pehle check karo ki sab ho sakta hai (aadha kaam karke rukna nahi) ----
+  const balances = {};
+  for (const r of rows) {
+    const acc = db.selectOne("accounts", a => a.accNo === r.accNo);
+    if (acc === null) return { ok: false, error: "Account " + r.accNo + " nahi mila." };
+    if (!(r.accNo in balances)) balances[r.accNo] = acc.balance;
+
+    balances[r.accNo] += (r.direction === "debit") ? r.amount + (r.fee || 0) : -r.amount;
+
+    const floor = -decorateAccount(acc).getExtraLimit();      // overdraft ho to minus tak chalega
+    if (balances[r.accNo] < floor) {
       return { ok: false,
-               error: "Beneficiary " + target.accNo + " ke paas paisa wapas lene ke liye balance nahi hai." };
+               error: "Account " + r.accNo + " me itna balance nahi hai ki " + r.txnId +
+                      " (" + r.type + ") wapas ho sake." };
     }
   }
 
-  let newBalance;
-
-  if (txnRow.direction === "debit") {
-    // paisa nikla tha -> wapas daalo
-    newBalance = account.balance + total;
-    db.update("accounts", account.id, { balance: newBalance });
-    if (target) {
-      db.update("accounts", target.id, { balance: target.balance - txnRow.amount });
-    }
-  } else {
-    // paisa aaya tha -> wapas nikaalo
-    if (account.balance < txnRow.amount) {
-      return { ok: false, error: "Account me itna balance nahi ki reversal ho sake." };
-    }
-    newBalance = account.balance - txnRow.amount;
-    db.update("accounts", account.id, { balance: newBalance });
+  // ---- ab asli kaam ----
+  let mainResult = null;
+  for (const r of rows) {
+    const res = undoRowEffect(db, r);
+    if (mainResult === null) mainResult = res;
   }
 
-  // original row par nishaan laga do
-  db.update("transactions", txnRow.id, { reversed: true });
+  return { ok: true, refId: mainResult.refId, balance: mainResult.balance,
+           reversedCount: rows.length };
+}
 
-  // reversal ki apni entry banao aur sabko batao (Observer)
-  const user = db.selectOne("users", u => u.id === account.userId);
+/* ek row ka asar ulta karo: balance, points, REVERSED nishaan,
+   reversal ki nayi entry, aur customer ko alert (Observer) */
+function undoRowEffect(db, row) {
+  const account = db.selectOne("accounts", a => a.accNo === row.accNo);
+  const total   = row.amount + (row.fee || 0);
 
+  const newBalance = (row.direction === "debit") ? account.balance + total
+                                                 : account.balance - row.amount;
+  const changes = { balance: newBalance };
+  if (row.points) {
+    changes.rewardPoints = Math.max(0, (account.rewardPoints || 0) - row.points);
+  }
+  db.update("accounts", account.id, changes);
+  db.update("transactions", row.id, { reversed: true });
+
+  const user  = db.selectOne("users", u => u.id === account.userId);
   const event = {
-    txnId:      "REV" + txnRow.txnId.replace("TXN", ""),
-    accNo:      account.accNo,
-    userId:     account.userId,
-    holder:     user ? user.name : "Customer",
-    type:       "Reversal",
-    direction:  txnRow.direction === "debit" ? "credit" : "debit",
-    amount:     total,
-    fee:        0,
-    balance:    newBalance,
-    mode:       "System Reversal",
-    status:     "APPROVED",
-    approvedBy: "System",
-    remark:     txnRow.txnId + " reverse ki gayi"
+    txnId:       "REV" + String(row.txnId).replace(/^TXN/, ""),
+    accNo:       account.accNo,
+    userId:      account.userId,
+    holder:      user ? user.name : "Customer",
+    type:        "Reversal",
+    direction:   row.direction === "debit" ? "credit" : "debit",
+    amount:      row.direction === "debit" ? total : row.amount,
+    fee:         0,
+    balance:     newBalance,
+    mode:        "System Reversal",
+    status:      "APPROVED",
+    approvedBy:  "System",
+    remark:      row.txnId + " (" + row.type + ") reverse ki gayi",
+    parentTxnId: row.txnId
   };
 
-  if (user) {
-    buildSubject(user, account).notify(event);
-  } else {
-    new DatabaseLoggerObserver().update(event);
-  }
+  const fresh = db.selectOne("accounts", a => a.id === account.id);
+  if (user) buildSubject(user, fresh).notify(event);
+  else      new DatabaseLoggerObserver().update(event);
 
-  return { ok: true, refId: event.txnId, balance: newBalance };
+  return { refId: event.txnId, balance: newBalance };
 }
 
 
@@ -166,10 +193,18 @@ class CommandInvoker {
     return result;
   }
 
-  // us user ki sabse aakhri command jo abhi undo nahi hui
+  /* us user ki sabse aakhri command jo abhi undo ho sakti hai.
+     Agar bank staff ne beech me use reverse kar diya tha to us
+     command ko "undone" maan kar uske pehle wali dekhte hain. */
   lastUndoable(userId) {
     const rows = this.db.select("command_log", c => c.userId === userId && !c.undone);
-    return rows.length === 0 ? null : rows[rows.length - 1];
+
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const txn = this.db.selectOne("transactions", t => t.id === rows[i].txnRowId);
+      if (txn !== null && canReverseRow(txn)) return rows[i];
+      this.db.update("command_log", rows[i].id, { undone: true });
+    }
+    return null;
   }
 
   undoLast(userId) {
@@ -179,11 +214,7 @@ class CommandInvoker {
     }
 
     const txnRow = this.db.selectOne("transactions", t => t.id === entry.txnRowId);
-    if (txnRow === null) {
-      return { ok: false, error: "Transaction record nahi mila." };
-    }
-
-    const res = reverseTransactionRow(txnRow);
+    const res    = reverseTransactionRow(txnRow);
     if (res.ok) {
       this.db.update("command_log", entry.id, { undone: true });
       res.label = entry.label;

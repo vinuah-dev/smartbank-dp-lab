@@ -136,9 +136,12 @@ class DatabaseLoggerObserver extends TransactionObserver {
       status:     event.status,
       approvedBy: event.approvedBy,
       remark:     event.remark,
-      toAccount:  event.toAccount || null,   // reversal ke liye zaroori
+      toAccount:  event.toAccount || null,     // reversal ke liye zaroori
+      parentTxnId: event.parentTxnId || null,  // cashback / transfer-in kis txn se juda hai
+      points:     event.points || 0,
       reversed:   false,
-      time:       new Date().toLocaleString()
+      time:       new Date().toLocaleString(),
+      ts:         new Date().toISOString()     // daily limit ke hisaab ke liye
     });
   }
 }
@@ -178,21 +181,28 @@ class TransactionSubject {
 /* ----------------------------------------------------------
    User ki settings ke hisaab se subject taiyaar karo.
    Alerts on/off karne par yahi attach/detach hota hai.
+   Settings har user ki apni hoti hain (users table me save).
    ---------------------------------------------------------- */
-function getAlertPrefs() {
-  const raw = Store.api.getItem("sb_prefs");
-  if (raw === null) {
-    return { sms: true, email: true, push: true, lowBalance: true };
-  }
-  return JSON.parse(raw);
+const DEFAULT_ALERT_PREFS = { sms: true, email: true, push: true, lowBalance: true };
+
+function getAlertPrefs(user) {
+  const saved = user && user.alertPrefs ? user.alertPrefs : {};
+  return Object.assign({}, DEFAULT_ALERT_PREFS, saved);
 }
 
-function saveAlertPrefs(prefs) {
-  Store.api.setItem("sb_prefs", JSON.stringify(prefs));
+function saveAlertPrefs(userId, prefs) {
+  const clean = {
+    sms:        !!prefs.sms,
+    email:      !!prefs.email,
+    push:       !!prefs.push,
+    lowBalance: !!prefs.lowBalance
+  };
+  DatabaseConnection.getInstance().update("users", userId, { alertPrefs: clean });
+  return clean;
 }
 
 function buildSubject(user, account) {
-  const prefs   = getAlertPrefs();
+  const prefs   = getAlertPrefs(user);
   const subject = new TransactionSubject();
 
   if (prefs.sms)        subject.attach(new SMSObserver(user.mobile));

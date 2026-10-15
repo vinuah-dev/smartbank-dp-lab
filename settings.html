@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -17,7 +17,8 @@
     <p class="sub">
       Yahan se observers ko chalu ya band karo. Jo observer detach hai use transaction
       ki khabar hi nahi milegi. Account ka code isse bilkul nahi badalta &mdash; yahi
-      loose coupling hai.
+      loose coupling hai. Ye settings sirf <b>aapke</b> liye hain (database me save hoti hain),
+      doosre customers par asar nahi padta.
     </p>
 
     <label class="check"><input type="checkbox" id="pSms">   SMS Alert &mdash; <span id="uMobile"></span></label>
@@ -61,14 +62,25 @@
   </div>
 
   <div class="card">
-    <h2>Profile</h2>
-    <div class="table-wrap"><table id="profTable"></table></div>
+    <h2>Change Password</h2>
+    <p class="sub">Naya password bhi SHA-256 + naye salt ke saath hash hokar hi save hota hai.</p>
+    <form onsubmit="changePassword(); return false;">
+      <div class="grid3">
+        <div><label for="oldPass">Current Password</label>
+             <input type="password" id="oldPass" autocomplete="current-password" required></div>
+        <div><label for="newPass">New Password</label>
+             <input type="password" id="newPass" autocomplete="new-password" required></div>
+        <div><label for="newPass2">Confirm New Password</label>
+             <input type="password" id="newPass2" autocomplete="new-password" required></div>
+      </div>
+      <button class="btn" type="submit">Update Password</button>
+    </form>
+    <div id="passMsg"></div>
   </div>
 
   <div class="card">
-    <h2>Danger Zone</h2>
-    <p class="sub">Demo dobara shuru se dikhana ho to poora database reset kar sakte ho.</p>
-    <button class="btn red" onclick="resetAll()">Reset Database &amp; Logout</button>
+    <h2>Profile</h2>
+    <div class="table-wrap"><table id="profTable"></table></div>
   </div>
 
 </div>
@@ -76,6 +88,7 @@
 <footer>SmartBank &mdash; Design Patterns Lab Project</footer>
 <div id="toast" class="toast"></div>
 
+<script src="js/schema.js"></script>
 <script src="js/core.js"></script>
 <script src="js/accounts.js"></script>
 <script src="js/state.js"></script>
@@ -91,7 +104,10 @@
 <script src="js/facade.js"></script>
 <script src="js/app.js"></script>
 <script>
-if (requireLogin()) {
+const db      = DatabaseConnection.getInstance();
+const session = SessionManager.getInstance();
+
+if (requireCustomer()) {
   renderHeader("settings.html");
   loadPrefs();
   loadProfile();
@@ -100,8 +116,8 @@ if (requireLogin()) {
 }
 
 function loadPrefs() {
-  const p    = getAlertPrefs();
-  const user = SessionManager.getInstance().getUser();
+  const user = session.getUser();
+  const p    = getAlertPrefs(user);
 
   $("pSms").checked   = p.sms;
   $("pEmail").checked = p.email;
@@ -113,7 +129,7 @@ function loadPrefs() {
 }
 
 function savePrefs() {
-  saveAlertPrefs({
+  saveAlertPrefs(session.getUser().id, {
     sms:        $("pSms").checked,
     email:      $("pEmail").checked,
     push:       $("pPush").checked,
@@ -124,62 +140,65 @@ function savePrefs() {
 }
 
 function loadObservers() {
-  const session = SessionManager.getInstance();
   const subject = buildSubject(session.getUser(), session.getAccount());
   const names   = subject.getObserverNames();
 
   $("obsList").innerHTML =
     '<p class="sub">Agli transaction par ' + names.length + ' observers chalenge:</p>' +
-    names.map(n => '<div class="notif"><div class="title">' + n + "</div></div>").join("");
+    names.map(n => '<div class="notif"><div class="title">' + esc(n) + "</div></div>").join("");
 }
 
 function pickChannel(code) {
-  SessionManager.getInstance().setChannel(code);
+  session.setChannel(code);
   window.location.reload();
 }
 
 function loadChannelTable() {
-  const rows = [
-    ["web",    "Web Portal"],
-    ["mobile", "Mobile App"],
-    ["atm",    "ATM Machine"]
-  ];
-  const now = SessionManager.getInstance().getChannel();
+  const now = session.getChannel();
 
-  $("chBody").innerHTML = rows.map(function (r) {
-    const f = getChannelFactory(r[0]);
+  $("chBody").innerHTML = ["web", "mobile", "atm"].map(function (code) {
+    const f = getChannelFactory(code);
     const t = f.createTheme(), l = f.createLayout(), w = f.createWording();
-    const mark = (r[0] === now) ? ' <span class="pill green">active</span>' : "";
+    const mark = (code === now) ? ' <span class="pill green">active</span>' : "";
     return "<tr>" +
       "<td><b>" + f.getName() + "</b>" + mark + "</td>" +
       "<td>" + t.constructor.name + "<br><span class='hint'>" + t.vars()["--brand"] + "</span></td>" +
       "<td>" + l.constructor.name + "<br><span class='hint'>radius " + l.vars()["--radius"] + "</span></td>" +
-      "<td>" + w.constructor.name + "<br><span class='hint'>\"" + w.payButton() + "\"</span></td>" +
+      "<td>" + w.constructor.name + "<br><span class='hint'>\"" + esc(w.payButton()) + "\"</span></td>" +
     "</tr>";
   }).join("");
 }
 
-function loadProfile() {
-  const session = SessionManager.getInstance();
-  const user    = session.getUser();
-  const acc     = new AccountProxy(session.get().accNo, user.id).getDetails();
-  const s       = session.get();
+function changePassword() {
+  const user = session.getUser();
+  const say  = (t, bad) => {
+    $("passMsg").innerHTML = '<div class="result ' + (bad ? "bad" : "ok") + '">' + esc(t) + "</div>";
+  };
 
-  $("profTable").innerHTML =
-    "<tr><th>Name</th><td>" + user.name + "</td></tr>" +
-    "<tr><th>Email</th><td>" + user.email + "</td></tr>" +
-    "<tr><th>Mobile</th><td>" + user.mobile + "</td></tr>" +
-    "<tr><th>Account No</th><td>" + acc.accNo + "</td></tr>" +
-    "<tr><th>Account Type</th><td>" + acc.type + "</td></tr>" +
-    "<tr><th>Opened On</th><td>" + acc.openedOn + "</td></tr>" +
-    "<tr><th>Logged in at</th><td>" + s.loginTime + "</td></tr>";
+  if (hashPassword($("oldPass").value, user.salt) !== user.password) return say("Current password galat hai.", true);
+  if ($("newPass").value.length < 4)                return say("Naya password kam se kam 4 characters ka ho.", true);
+  if ($("newPass").value !== $("newPass2").value)   return say("Dono naye password match nahi kar rahe.", true);
+
+  const salt = makeSalt();
+  db.update("users", user.id, { password: hashPassword($("newPass").value, salt), salt: salt });
+  $("oldPass").value = $("newPass").value = $("newPass2").value = "";
+  say("Password badal gaya. Agli baar naye password se login karna.");
+  toast("Password update ho gaya");
 }
 
-function resetAll() {
-  if (!confirm("Poora database mit jaayega aur demo data wapas aa jaayega. Sure?")) return;
-  DatabaseConnection.getInstance().dropDatabase();
-  Store.api.removeItem("sb_prefs");
-  window.location.href = "index.html";
+function loadProfile() {
+  const user = session.getUser();
+  const acc  = BankingFacade.getInstance().details(session.get().accNo);
+  const s    = session.get();
+
+  $("profTable").innerHTML =
+    "<tr><th>Name</th><td>" + esc(user.name) + "</td></tr>" +
+    "<tr><th>Email</th><td>" + esc(user.email) + "</td></tr>" +
+    "<tr><th>Mobile</th><td>" + esc(user.mobile) + "</td></tr>" +
+    "<tr><th>Active Account</th><td>" + esc(acc.accNo) + " (" + esc(acc.type) + ")</td></tr>" +
+    "<tr><th>Opened On</th><td>" + esc(acc.openedOn) + "</td></tr>" +
+    "<tr><th>Logged in at</th><td>" + esc(s.loginTime) + "</td></tr>" +
+    "<tr><th>Database</th><td>" + esc(db.getDriverName()) + "</td></tr>";
 }
 </script>
 </body>

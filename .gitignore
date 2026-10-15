@@ -1,0 +1,14 @@
+# SQLite database files (server.py banata hai, har laptop par naye bante hain)
+data/
+*.db
+*.db-journal
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Editor / tool settings
+.claude/
+.vscode/
+*.db-wal
+*.db-shm

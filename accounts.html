@@ -75,6 +75,7 @@
 <footer>SmartBank &mdash; Design Patterns Lab Project</footer>
 <div id="toast" class="toast"></div>
 
+<script src="js/schema.js"></script>
 <script src="js/core.js"></script>
 <script src="js/accounts.js"></script>
 <script src="js/state.js"></script>
@@ -92,7 +93,7 @@
 <script>
 const facade = BankingFacade.getInstance();
 
-if (requireLogin()) {
+if (requireCustomer()) {
   renderHeader("accounts.html");
   loadAccounts();
   loadFeatures();
@@ -112,32 +113,29 @@ function loadAccounts() {
     return '<div class="notif" style="border-left-color:' +
            (isNow ? "var(--brand)" : "var(--border)") + '">' +
       '<div class="head">' +
-        '<span class="title">' + a.accNo + " &mdash; " + a.type +
+        '<span class="title">' + esc(a.accNo) + " &mdash; " + esc(a.type) +
           (isNow ? ' <span class="pill blue">active</span>' : "") +
           ' <span class="pill ' + state.getColor() + '">' + state.getName() + "</span></span>" +
-        '<span class="time">Opened ' + a.openedOn + "</span>" +
+        '<span class="time">Opened ' + esc(a.openedOn) + "</span>" +
       "</div>" +
       '<div class="body">' +
         "Balance: <b>Rs. " + money(a.balance) + "</b> &nbsp;|&nbsp; " +
         "Min: Rs. " + money(a.minBalance) + " &nbsp;|&nbsp; " +
         "Daily limit: " + (a.dailyLimit === 0 ? "N/A" : "Rs. " + money(a.dailyLimit)) +
         " &nbsp;|&nbsp; Reward points: " + (a.rewardPoints || 0) + "<br>" +
-        deco.getDescription() +
+        esc(deco.getDescription()) +
         (deco.getMonthlyFee() > 0
           ? " &nbsp;|&nbsp; Monthly fee Rs. " + money(deco.getMonthlyFee()) : "") +
       "</div>" +
       (isNow ? "" :
         '<button class="btn small" style="margin-top:8px" onclick="useAccount(\'' +
-        a.accNo + '\')">Use this account</button>') +
+        esc(a.accNo) + '\')">Use this account</button>') +
     "</div>";
   }).join("");
 }
 
 function useAccount(accNo) {
-  const session = SessionManager.getInstance();
-  const channel = session.getChannel();
-  session.login(session.getUser().id, accNo);
-  session.setChannel(channel);
+  SessionManager.getInstance().switchAccount(accNo);
   window.location.reload();
 }
 
@@ -149,10 +147,13 @@ function loadFeatures() {
   const on  = acc.features || [];
 
   $("featureBox").innerHTML =
-    '<p class="sub">Account: <b>' + acc.accNo + "</b> (" + acc.type + ")</p>" +
+    (acc.type === "Fixed Deposit"
+      ? '<div class="note">Fixed Deposit account par add-on services nahi lagti. ' +
+        'Header se Savings ya Current account chuno.</div>' : "") +
+    '<p class="sub">Account: <b>' + esc(acc.accNo) + "</b> (" + esc(acc.type) + ")</p>" +
     FEATURE_CATALOG.map(f =>
       '<label class="check"><input type="checkbox" id="f_' + f.key + '"' +
-      (on.indexOf(f.key) !== -1 ? " checked" : "") + "> <b>" + f.name +
+      (on.indexOf(f.key) !== -1 ? " checked" : "") + (acc.type === "Fixed Deposit" ? " disabled" : "") + "> <b>" + f.name +
       "</b> &mdash; " + f.desc + " (Rs. " + f.fee + "/month)</label>").join("");
 }
 
@@ -161,15 +162,18 @@ function saveFeatures() {
   const acc    = facade.activeAccount();
   const res    = facade.setFeatures(acc.accNo, picked);
 
-  if (!res.ok) return toast(res.error, "bad");
+  if (!res.ok) {
+    $("featureResult").innerHTML = '<div class="result bad">' + esc(res.error) + "</div>";
+    return toast(res.error, "bad");
+  }
 
   $("featureResult").innerHTML =
     '<div class="result ok"><b>Features updated</b><br>' +
-    "Ab account hai: <b>" + res.description + "</b><br>" +
+    "Ab account hai: <b>" + esc(res.description) + "</b><br>" +
     "Total monthly fee: Rs. " + money(res.monthlyFee) + "</div>" +
     '<p class="sub" style="margin-top:8px">Decorator chain: ' +
-    (picked.length === 0 ? "BasicAccount (koi wrapper nahi)"
-      : "BasicAccount" + picked.map(k => " &rarr; " +
+    (res.features.length === 0 ? "BasicAccount (koi wrapper nahi)"
+      : "BasicAccount" + res.features.map(k => " &rarr; " +
           FEATURE_CATALOG.find(f => f.key === k).cls).join("")) + "</p>";
 
   loadAccounts();
@@ -191,7 +195,7 @@ function loadInterest() {
   }
 
   $("interestBox").innerHTML =
-    '<p class="sub">Account <b>' + acc.accNo + "</b> (" + acc.type + ") &mdash; " +
+    '<p class="sub">Account <b>' + esc(acc.accNo) + "</b> (" + esc(acc.type) + ") &mdash; " +
     "Strategy: <b>" + proj.strategy + "</b> @ " + proj.rate + "%<br>" +
     "Formula: <code>" + proj.formula + "</code></p>" +
     '<div class="table-wrap"><table><thead><tr><th>Period</th>' +
@@ -204,14 +208,14 @@ function creditInterest() {
   const res = facade.applyInterest(acc.accNo, 1);
 
   if (!res.ok) {
-    $("interestResult").innerHTML = '<div class="result bad">' + res.error + "</div>";
+    $("interestResult").innerHTML = '<div class="result bad">' + esc(res.error) + "</div>";
     return toast(res.error, "bad");
   }
 
   $("interestResult").innerHTML =
     '<div class="result ok"><b>Interest jama ho gaya</b><br>' +
     res.strategy + " se Rs. " + money(res.earned) + " mila. " +
-    "Naya balance Rs. " + money(res.balance) + " (ref " + res.txnId + ")</div>";
+    "Naya balance Rs. " + money(res.balance) + " (ref " + esc(res.txnId) + ")</div>";
 
   loadAccounts();
   loadInterest();
@@ -236,16 +240,16 @@ function openNew() {
   const made = facade.openAccount($("nType").value, Number($("nOpen").value));
 
   if (!made.ok) {
-    $("openResult").innerHTML = '<div class="result bad">' + made.error + "</div>";
+    $("openResult").innerHTML = '<div class="result bad">' + esc(made.error) + "</div>";
     return toast(made.error, "bad");
   }
 
   $("openResult").innerHTML =
     '<div class="result ok"><b>Naya account khul gaya</b><br>' +
-    made.account.accNo + " &mdash; " + made.account.getType() +
+    esc(made.account.accNo) + " &mdash; " + made.account.getType() +
     " &nbsp;|&nbsp; Balance Rs. " + money(made.account.balance) + "<br>" +
     "Factory: <code>" + getAccountFactory($("nType").value).constructor.name +
-    "</code></div>";
+    "</code><br>History me 'Account Opening' entry bhi ban gayi. Header ke dropdown se ise chuno.</div>";
 
   loadAccounts();
   renderHeader("accounts.html");

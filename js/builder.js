@@ -57,12 +57,17 @@ class TransactionBuilder {
   }
 
   build() {
-    if (!this.req.amount || this.req.amount <= 0) {
+    if (!this.req.amount || !isFinite(this.req.amount) || this.req.amount <= 0) {
       throw new Error("Amount sahi nahi hai.");
+    }
+    if (this.req.paymentType && !this.req.gatewayCode) {
+      throw new Error("Payment ke liye gateway chunna zaroori hai.");
     }
     if (!this.req.remark) {
       this.req.remark = this.req.type;
     }
+    this.req.remark  = String(this.req.remark).slice(0, 120);
+    this.req.builtBy = "TransactionBuilder";
     return this.req;
   }
 }

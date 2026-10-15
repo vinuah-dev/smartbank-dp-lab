@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -88,6 +88,7 @@
 <footer>SmartBank &mdash; Design Patterns Lab Project</footer>
 <div id="toast" class="toast"></div>
 
+<script src="js/schema.js"></script>
 <script src="js/core.js"></script>
 <script src="js/accounts.js"></script>
 <script src="js/state.js"></script>
@@ -103,7 +104,7 @@
 <script src="js/facade.js"></script>
 <script src="js/app.js"></script>
 <script>
-if (requireLogin()) {
+if (requireCustomer()) {
   renderHeader("payments.html");
   fillGateways("bGateway");
   fillGateways("rGateway");
@@ -125,7 +126,7 @@ function showBalance() {
   const deco   = decorateAccount(acc);
 
   $("balAmount").textContent = "Rs. " + money(acc.balance);
-  $("balMeta").innerHTML     = deco.getDescription() + "  |  " + acc.accNo +
+  $("balMeta").innerHTML     = esc(deco.getDescription()) + "  |  " + esc(acc.accNo) +
     (deco.getCashback("Bill Payment", 10000) > 0
       ? '  |  <span class="pill green">1% cashback active</span>' : "");
 }

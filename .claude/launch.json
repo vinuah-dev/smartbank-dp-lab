@@ -4,7 +4,7 @@
     {
       "name": "smartbank",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8123"],
+      "runtimeArgs": ["server.py", "--port", "8123", "--no-browser"],
       "port": 8123
     }
   ]

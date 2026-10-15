@@ -83,13 +83,19 @@ class FraudCheckHandler extends ApprovalHandler {
       return request;
     }
 
-    // daily limit check
-    if (request.amount > request.dailyLimit) {
+    // daily limit check - aaj jitna nikal chuke usko bhi jodo
+    // (bank ki apni fee jaisi system debit par limit nahi lagti)
+    if (!request.systemDebit && request.usedToday + request.amount > request.dailyLimit) {
+      const left = Math.max(0, request.dailyLimit - request.usedToday);
       request.status     = "REJECTED";
       request.approvedBy = "-";
       request.trail.push({
         by: this.name,
-        action: "Rejected - daily limit Rs. " + money(request.dailyLimit) + " cross ho rahi hai"
+        action: "Rejected - daily limit Rs. " + money(request.dailyLimit) +
+                (request.usedToday > 0
+                  ? " me se aaj Rs. " + money(request.usedToday) + " use ho chuka hai, sirf Rs. " +
+                    money(left) + " baaki hai"
+                  : " cross ho rahi hai")
       });
       return request;
     }
@@ -188,6 +194,8 @@ function requestApproval(details) {
     accountType:   details.accountType,
     accountStatus: details.accountStatus || "Active",
     extraLimit:    details.extraLimit || 0,
+    usedToday:     details.usedToday || 0,
+    systemDebit:   details.systemDebit === true,
     purpose:       details.purpose,
     status:        "PENDING",
     approvedBy:    "",
