@@ -105,7 +105,7 @@ python tests/test_server.py     # 12 checks: SQLite server, read-only console, i
 
 The same `tests/suite.js` runs in the browser at `tests.html` — against a separate test
 database, so demo data is never touched. In server mode `tests.html` also has a
-**UI click-through test** (`tests/e2e-ui.js`, 51 checks) that fills the real forms and presses
+**UI click-through test** (`tests/e2e-ui.js`, 52 checks; resets the demo data before and after) that fills the real forms and presses
 the buttons on every page.
 
 The suite's **ledger check** verifies, for every account, that the balance equals the sum of

@@ -8,7 +8,8 @@
    reverse, access control.
 
    Chalane ka tarika: server mode me tests.html kholo aur
-   "UI click-through test" dabao. Ye demo data par chalta hai.
+   "UI click-through test" dabao. Test shuru aur ant dono me
+   demo data ko fresh reset karta hai.
    ========================================================== */
 (async () => {
   const report = [];
@@ -42,8 +43,12 @@
   const text = (w, id) => ($(w, id) ? $(w, id).innerText : "");
 
   let w = await open("index.html");
-  w.eval("SessionManager").getInstance().logout();
   const db = () => w.eval("DatabaseConnection").getInstance();
+
+  // har baar fresh demo data se shuru (aaj ki daily limit, purane accounts ka asar na pade)
+  db().dropDatabase();
+  w = await open("index.html");                     // index.html dobara seed karta hai
+  w.eval("SessionManager").getInstance().logout();
 
   /* ---------------- access control ---------------- */
   w = await open("dashboard.html");
@@ -254,9 +259,10 @@
   check("frozen: deposit still works", /Successful/.test(text(w, "result")));
   w.doLogout(); await sleep(200);
 
-  // wapas normal
+  // test ka saara data hata kar fresh demo data wapas
+  db().dropDatabase();
   w = await open("index.html");
-  db().update("accounts", db().selectOne("accounts", a => a.accNo === savings).id, { status: "Active" });
+  check("demo data fresh again after the test", db().count("users") === 4 && db().count("accounts") === 4);
 
   frame.remove();
   return pass + " passed, " + fail + " failed\n" + report.filter(l => l.startsWith("FAIL")).join("\n") +

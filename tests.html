@@ -108,11 +108,11 @@ function applyFilter() {
 $("onlyFail").onchange = applyFilter;
 
 // UI test: har page ko iframe me khol kar asli forms bharta aur buttons dabata hai.
-// Ye DEMO data par chalta hai (thoda data badal jaata hai), isliye sirf server mode me.
+// Ye demo database ko shuru aur ant me fresh reset karta hai; sirf server mode me.
 if (DatabaseConnection.getInstance().isSQLite()) $("uiBtn").style.display = "";
 
 async function runUi() {
-  if (!confirm("UI test demo data par chalega (kuch transactions ban jaayengi). Chalaaye?")) return;
+  if (!confirm("UI test demo database ko fresh reset karke chalta hai, aur ant me phir fresh kar deta hai. Chalaaye?")) return;
   $("uiBtn").disabled = true;
   $("results").innerHTML = '<p class="empty">Pages khul rahe hain, forms bhare ja rahe hain... (15-20 sec)</p>';
   try {

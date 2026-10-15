@@ -268,7 +268,11 @@ class SQLiteServerDriver extends StorageDriver {
     xhr.open("POST", "api/db", false);
     xhr.setRequestHeader("Content-Type", "application/json");
     xhr.setRequestHeader("X-SB-DB", SB_TEST_MODE ? "test" : "main");
-    xhr.send(JSON.stringify(body));
+    try {
+      xhr.send(JSON.stringify(body));
+    } catch (e) {
+      throw new Error("Database error: server band hai. start.bat dobara chalao, phir page refresh karo.");
+    }
 
     let data = null;
     try { data = JSON.parse(xhr.responseText); } catch (e) { /* neeche handle */ }

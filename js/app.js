@@ -52,6 +52,28 @@ function localDayKey(date) {
 }
 
 
+/* ---------------- database / server toot jaaye to saaf message ---------------- */
+
+function showFatal(message) {
+  if (typeof document === "undefined" || !document.body) return;
+  let bar = document.getElementById("fatalBar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "fatalBar";
+    bar.className = "warnbar";
+    bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:100;font-size:14px;padding:10px";
+    document.body.appendChild(bar);
+  }
+  bar.textContent = message;
+}
+
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("error", function (e) {
+    if (e.message && /Database error/.test(e.message)) showFatal(e.message.replace(/^Uncaught Error: /, ""));
+  });
+}
+
+
 /* ---------------- kaun si transaction daily limit me ginti hai ---------------- */
 
 const LIMIT_TYPES   = ["Withdrawal", "Transfer", "Bill Payment", "Mobile Recharge"];
