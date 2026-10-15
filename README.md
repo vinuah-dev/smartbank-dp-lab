@@ -89,6 +89,7 @@ localStorage driver with the same interface — the rest of the code does not ch
 
 - Passwords: per-user random salt + SHA-256; 3 wrong passwords lock the login for 30 seconds.
 - Staff pages refuse customers and customer pages refuse staff.
+- The login lives in sessionStorage, so each browser tab has its own login (customer in one tab, staff in another).
 - All user-entered text is HTML-escaped before display; CSV export is formula-safe.
 - The server listens on this computer only (`127.0.0.1` / `::1`).
 
@@ -98,7 +99,7 @@ password hash (bcrypt / Argon2) on the server.
 ## Tests
 
 ```bash
-node tests/run-node.js          # 141 checks: every pattern, every rule, ledger balance
+node tests/run-node.js          # 144 checks: every pattern, every rule, ledger balance
 python tests/test_server.py     # 12 checks: SQLite server, read-only console, isolation
 ```
 

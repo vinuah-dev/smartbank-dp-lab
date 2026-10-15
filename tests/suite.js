@@ -429,6 +429,27 @@ function runSmartBankSuite(T) {
   T.check("CSV cells are quoted and formula-safe", csvCell('=1+1') === '"\'=1+1"' && csvCell('a"b') === '"a""b"');
 
   /* ------------------------------------------------------------ */
+  T.section("Edge cases");
+  r = fc.register({ name: "Rohit Verma", email: "rohit@test.in", mobile: "9988776655",
+                    password: "pass1", confirm: "pass1", type: "Savings", opening: 2000 });
+  const rohitSecond = fc.openAccount("Current", 20000);
+  fc.setStatus(r.account.accNo, "Closed");
+  sm.logout();
+  r = fc.login("rohit@test.in", "pass1");
+  T.check("login skips a closed first account", r.ok && sm.get().accNo === rohitSecond.account.accNo,
+          sm.get() && sm.get().accNo);
+
+  const amit2 = loginAs("amit@smartbank.in", 0);
+  fc.setFeatures(amit2.accNo, ["overdraft"]);
+  r = fc.transact(B().debit().type("Withdrawal").amount(bal(amit2.accNo) + 2000).mode("Branch Counter").remark("od").build());
+  const neg = fc.applyInterest(amit2.accNo, 1);
+  T.check("no interest on a negative balance, with a clear reason",
+          r.ok && bal(amit2.accNo) < 0 && !neg.ok && /Rs\. 0/.test(neg.error), neg.error);
+  fc.undoLast();
+  fc.setFeatures(amit2.accNo, []);
+  T.check("overdraft undo brings balance back", bal(amit2.accNo) >= 0);
+
+  /* ------------------------------------------------------------ */
   T.section("Clearing alerts");
   const others = db.select("notifications", n => n.userId !== rUser.id).length;
   db.deleteRows("notifications", db.select("notifications", n => n.userId === rUser.id).map(n => n.id));

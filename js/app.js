@@ -214,7 +214,8 @@ function requireLogin() {
   if (user.role !== "staff") {
     const acc = session.getAccount();
     if (acc === null || acc.userId !== user.id) {
-      const first = db.selectOne("accounts", a => a.userId === user.id);
+      const mine  = db.select("accounts", a => a.userId === user.id);
+      const first = mine.find(a => a.status !== "Closed") || mine[0] || null;
       if (first === null) { session.logout(); go("index.html"); return false; }
       session.switchAccount(first.accNo);
     }

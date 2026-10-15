@@ -67,8 +67,10 @@ class BankingFacade {
       return { ok: true, user: user, page: "admin.html" };
     }
 
-    const acc = this.db.selectOne("accounts", a => a.userId === user.id);
-    if (acc === null) return { ok: false, error: "Is user ka koi account nahi hai." };
+    // band ho chuke account ke bajaye pehla chalu account kholo
+    const accs = this.db.select("accounts", a => a.userId === user.id);
+    const acc  = accs.find(a => a.status !== "Closed") || accs[0];
+    if (!acc) return { ok: false, error: "Is user ka koi account nahi hai." };
 
     this.session.login(user.id, acc.accNo);
     return { ok: true, user: user, page: "dashboard.html" };
@@ -247,7 +249,9 @@ class BankingFacade {
     const earned   = strategy.calculate(Math.max(0, acc.balance), years || 1);
 
     if (earned <= 0) {
-      return { ok: false, error: acc.type + " account par interest nahi milta." };
+      return { ok: false, error: strategy.getRate() > 0
+        ? "Balance Rs. 0 ya usse kam hai, isliye interest nahi bana."
+        : acc.type + " account par interest nahi milta." };
     }
 
     const request = TransactionBuilder.create()

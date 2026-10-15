@@ -14,7 +14,7 @@ dikhana hai, aur kya poocha ja sakta hai.
    server nahi chal raha — neeche *Problem aaye to* dekho.)
 3. Fresh data chahiye to: `manager@smartbank.in / admin` se login → **Bank Console** →
    *Reset Database*. (Ya black window band karke `python server.py --reset` chalao.)
-4. Browser me 3 tabs khol ke rakho:
+4. Browser me 3 tabs khol ke rakho (har tab ka login alag hota hai):
    - Tab 1: login page (customer demo)
    - Tab 2: `http://127.0.0.1:8000/patterns.html` (DP Lab — bina login khulta hai)
    - Tab 3: `http://127.0.0.1:8000/tests.html`
@@ -63,21 +63,22 @@ DP Lab tab dikhao → upar ki table (Experiment → patterns → files).
 2. **Settings** → SMS band karo → Save → *Observers That Will Run* me 4 bache.
    Deposit karo → Alerts me SMS nahi aaya, baaki aaye. (SMS wapas chalu kar dena.)
    > "Account ka code nahi badla — sirf observer detach hua. Ye loose coupling hai."
-3. Logout → `manager@smartbank.in / admin` → **Database** page:
+3. **Naya tab** kholo (`Ctrl+T` → `127.0.0.1:8000`) → `manager@smartbank.in / admin` → **Database** page.
+   (Har tab ka apna login hai — customer wala tab login hi rehta hai.)
    - **ER diagram** (6 tables, foreign keys)
    - SQL console: *Balance per customer (JOIN)* sample dabao → asli SQL result
    - `DELETE FROM users` likh ke Run → "read-only" reject
-   - **Live SQL Log** — customer tab me transaction karo, yahan turant INSERT dikhega
+   - **Live SQL Log** — customer wale tab me koi transaction karo, staff tab me turant INSERT dikhega
 4. Black server window me bhi wahi SQL lines dikhao.
 
 ### Extra patterns (1-2 min, time ho to)
-- **Bank Console** → Ramesh ka Savings **Freeze** (State) → customer tab me withdraw → "Account Status: frozen" reject, deposit chal jaata hai. Phir **Activate**.
+- Staff tab → **Bank Console** → Ramesh ka Savings **Freeze** (State) → customer tab me page refresh karke withdraw → "Account Status: frozen" reject, deposit chal jaata hai. Phir **Activate**.
 - Bank Console → kisi Transfer par **Reverse** (Command) → dono accounts ka balance wapas, "2 entries ulti ki gayi".
 - Customer → Deposit / Withdraw → **Undo Last Transaction**.
 - My Accounts → add-ons (Decorator), Interest calculator (Strategy).
 
 ### Ant me (30 sec)
-**tests.html** → *Run all tests* → **141 passed** (3 sec).
+**tests.html** → *Run all tests* → **144 passed** (3 sec).
 > "Har pattern aur har rule ka automated test hai, aur har account ka balance uski entries ke jod se match hota hai."
 
 ---
