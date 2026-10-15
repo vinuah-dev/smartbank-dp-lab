@@ -25,11 +25,12 @@ const SB_NS        = SB_TEST_MODE ? "sbtest_" : "sb_";
    rehta hai). Kuch jagah localStorage band hota hai, tab site
    crash na ho isliye memory wala backup rakha hai.
    ---------------------------------------------------------- */
-const Store = (function () {
+function makeStore(getStorage) {
   try {
-    localStorage.setItem("__sb_test", "1");
-    localStorage.removeItem("__sb_test");
-    return { persistent: true, api: localStorage };
+    const s = getStorage();
+    s.setItem("__sb_test", "1");
+    s.removeItem("__sb_test");
+    return { persistent: true, api: s };
   } catch (e) {
     const mem = {};
     return {
@@ -41,7 +42,14 @@ const Store = (function () {
       }
     };
   }
-})();
+}
+
+// data (browser mode) -> localStorage, poore browser me ek
+const Store = makeStore(() => localStorage);
+
+// login session -> sessionStorage, har tab ka apna. Isliye ek tab me customer
+// aur doosre tab me bank staff ek saath login reh sakte hain.
+const SessionStore = makeStore(() => sessionStorage);
 
 
 /* ----------------------------------------------------------
@@ -236,7 +244,7 @@ class LocalStorageDriver extends StorageDriver {
 
   drop(tables) {
     for (const t of tables) Store.api.removeItem(this._key(t));
-    Store.api.removeItem(SB_NS + "session");
+    SessionStore.api.removeItem(SB_NS + "session");
     Store.api.removeItem(SB_NS + "schema");
   }
 }
@@ -281,7 +289,7 @@ class SQLiteServerDriver extends StorageDriver {
 
   drop() {
     this.call({ op: "drop" });
-    Store.api.removeItem(SB_NS + "session");
+    SessionStore.api.removeItem(SB_NS + "session");
   }
 }
 
@@ -485,7 +493,7 @@ class SessionManager {
       channel:   old ? old.channel : "web",
       loginTime: new Date().toLocaleString()
     };
-    Store.api.setItem(this.key, JSON.stringify(session));
+    SessionStore.api.setItem(this.key, JSON.stringify(session));
     return session;
   }
 
@@ -494,23 +502,23 @@ class SessionManager {
     const s = this.get();
     if (s === null) return;
     s.accNo = accNo;
-    Store.api.setItem(this.key, JSON.stringify(s));
+    SessionStore.api.setItem(this.key, JSON.stringify(s));
   }
 
   logout() {
-    Store.api.removeItem(this.key);
+    SessionStore.api.removeItem(this.key);
   }
 
   get() {
-    const raw = Store.api.getItem(this.key);
+    const raw = SessionStore.api.getItem(this.key);
     return raw === null ? null : JSON.parse(raw);
   }
 
   // seed ya admin kaam ke liye session ko save/restore karna
-  snapshot()         { return Store.api.getItem(this.key); }
+  snapshot()         { return SessionStore.api.getItem(this.key); }
   restore(raw) {
-    if (raw === null) Store.api.removeItem(this.key);
-    else Store.api.setItem(this.key, raw);
+    if (raw === null) SessionStore.api.removeItem(this.key);
+    else SessionStore.api.setItem(this.key, raw);
   }
 
   isLoggedIn() {
@@ -533,7 +541,7 @@ class SessionManager {
     const s = this.get();
     if (s === null) return;
     s.channel = channel;
-    Store.api.setItem(this.key, JSON.stringify(s));
+    SessionStore.api.setItem(this.key, JSON.stringify(s));
   }
 
   getChannel() {

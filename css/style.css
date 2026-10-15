@@ -516,3 +516,5 @@ details.viva p { font-size: 14px; margin-top: 7px; }
   a { color: #000; text-decoration: none; }
 }
 .demo-bar input[type=checkbox] { min-width: 0; width: auto; }
+.topbar .channel-pick { width: auto; max-width: 230px; }
+td.num { white-space: nowrap; }

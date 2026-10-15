@@ -153,7 +153,8 @@ function loadDashboard() {
     body.innerHTML = all.slice(0, 6).map(t => txnRowHtml(t)).join("");
   }
 
-  $("chart").innerHTML = miniChart(all.filter(t => t.status === "APPROVED"));
+  // account opening ka bada deposit chart ko bigaad deta hai, isliye sirf asli activity
+  $("chart").innerHTML = miniChart(all.filter(t => t.status === "APPROVED" && t.type !== "Account Opening"));
 
   const sum  = facade.summary(acc.accNo);
   const mine = facade.myAccounts();
