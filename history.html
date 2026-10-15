@@ -1,0 +1,228 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Transaction History</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Transaction History</h2>
+    <p class="sub">
+      Ye seedha database ke <code>transactions</code> table se aa raha hai. Har row
+      wahan <b>Database Logger observer</b> ne daali hai. Page refresh karne par bhi
+      data rehta hai.
+    </p>
+
+    <div class="grid3">
+      <div>
+        <label for="fType">Type</label>
+        <select id="fType" onchange="loadHistory()">
+          <option value="">All</option>
+          <option>Deposit</option>
+          <option>Withdrawal</option>
+          <option>Transfer</option>
+          <option>Bill Payment</option>
+          <option>Mobile Recharge</option>
+          <option>Interest Credit</option>
+          <option>Cashback</option>
+          <option>Service Charge</option>
+          <option>Reversal</option>
+        </select>
+      </div>
+      <div>
+        <label for="fStatus">Status</label>
+        <select id="fStatus" onchange="loadHistory()">
+          <option value="">All</option>
+          <option>APPROVED</option>
+          <option>REJECTED</option>
+        </select>
+      </div>
+      <div>
+        <label for="fSearch">Search (ref / remark)</label>
+        <input type="text" id="fSearch" oninput="loadHistory()" placeholder="TXN1001">
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Ref</th><th>Type</th><th>Mode</th><th>Approved By</th><th>Status</th>
+              <th class="num">Amount</th><th class="num">Fee</th><th class="num">Balance</th>
+              <th>Remark</th><th>Time</th></tr>
+        </thead>
+        <tbody id="hBody"></tbody>
+      </table>
+    </div>
+
+    <p class="sub" style="margin-top:10px" id="hCount"></p>
+    <button class="btn small grey" onclick="exportStatement()">Download statement (CSV)</button>
+  </div>
+
+  <div class="card">
+    <h2>Command History <span class="hint">(Command pattern)</span></h2>
+    <p class="sub">
+      Har successful transaction ek command object thi. Jo abhi tak undo nahi hui wo
+      ACTIVE hai. Undo <a href="banking.html">Deposit / Withdraw</a> page se hota hai.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Command</th><th>Account</th><th>State</th><th>Time</th></tr></thead>
+        <tbody id="cmdBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Account Access Log <span class="hint">(Proxy pattern)</span></h2>
+    <p class="sub">
+      Aapke account ko jitni baar bhi kholne ki koshish hui &mdash; allowed ho ya denied
+      &mdash; <code>AccountProxy</code> ne wo sab <code>access_log</code> table me likha hai.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Account</th><th>Operation</th><th>Result</th><th>Reason</th><th>Time</th></tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Database Status <span class="hint">(Singleton connection)</span></h2>
+    <div class="grid3" id="dbStats"></div>
+    <div id="dbSingle" class="note" style="margin-top:14px"></div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("history.html");
+  loadHistory();
+  loadCommands();
+  loadAccessLog();
+  loadDbStats();
+}
+
+function currentRows() {
+  const facade = BankingFacade.getInstance();
+  return facade.statement(SessionManager.getInstance().get().accNo, {
+    type:   $("fType").value,
+    status: $("fStatus").value,
+    search: $("fSearch").value.trim()
+  });
+}
+
+function loadHistory() {
+  const rows = currentRows();
+  const body = $("hBody");
+
+  if (rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="10" class="empty">Koi record nahi mila.</td></tr>';
+  } else {
+    body.innerHTML = rows.map(t => txnRowHtml(t)).join("");
+  }
+
+  $("hCount").textContent = "Showing " + rows.length + " record(s).";
+}
+
+function exportStatement() {
+  const rows = currentRows();
+  if (rows.length === 0) return toast("Export ke liye koi row nahi hai.", "bad");
+  downloadCSV(rows, "smartbank-statement-" +
+                    SessionManager.getInstance().get().accNo + ".csv");
+  toast(rows.length + " rows CSV me download ho gayi");
+}
+
+function loadCommands() {
+  const facade = BankingFacade.getInstance();
+  const rows   = CommandInvoker.getInstance().history(
+                   SessionManager.getInstance().getUser().id);
+  const body   = $("cmdBody");
+
+  if (rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="5" class="empty">Abhi koi command run nahi hui.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.slice(0, 15).map(c =>
+    "<tr><td>" + c.id + "</td><td>" + c.label + "</td><td>" + c.accNo + "</td>" +
+    '<td><span class="pill ' + (c.undone ? "grey" : "green") + '">' +
+    (c.undone ? "UNDONE" : "ACTIVE") + "</span></td>" +
+    "<td>" + c.time + "</td></tr>").join("");
+}
+
+function loadAccessLog() {
+  const db    = DatabaseConnection.getInstance();
+  const accNo = SessionManager.getInstance().get().accNo;
+
+  const rows = db.select("access_log", l => l.accNo === accNo).reverse().slice(0, 20);
+  const body = $("logBody");
+
+  if (rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" class="empty">Koi access record nahi hai.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(l =>
+    "<tr>" +
+      "<td>" + l.id + "</td>" +
+      "<td>" + l.accNo + "</td>" +
+      "<td>" + l.operation + "</td>" +
+      '<td><span class="pill ' + (l.allowed ? "green" : "red") + '">' +
+        (l.allowed ? "ALLOWED" : "DENIED") + "</span></td>" +
+      "<td>" + l.reason + "</td>" +
+      "<td>" + l.time + "</td>" +
+    "</tr>").join("");
+}
+
+function loadDbStats() {
+  const db  = DatabaseConnection.getInstance();
+  const db2 = DatabaseConnection.getInstance();
+
+  const boxes = [
+    ["Users",         db.count("users")],
+    ["Accounts",      db.count("accounts")],
+    ["Transactions",  db.count("transactions")],
+    ["Notifications", db.count("notifications")],
+    ["Access Logs",   db.count("access_log")],
+    ["Commands",      db.count("command_log")],
+    ["Queries Run",   db.queryCount]
+  ];
+
+  $("dbStats").innerHTML = boxes.map(b =>
+    '<div class="stat"><div class="k">' + b[0] + '</div><div class="v">' + b[1] + "</div></div>"
+  ).join("");
+
+  $("dbSingle").innerHTML =
+    "Database: <b>" + db.dbName + "</b> &nbsp;|&nbsp; Connected: <b>" + db.connected + "</b><br>" +
+    "<code>DatabaseConnection.getInstance() === DatabaseConnection.getInstance()</code> &rarr; <b>" +
+    (db === db2) + "</b><br>" +
+    "Isliye poori website ek hi connection object use kar rahi hai.";
+}
+</script>
+</body>
+</html>

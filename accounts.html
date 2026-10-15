@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - My Accounts</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>My Accounts</h2>
+    <p class="sub">
+      Ek customer ke kai account ho sakte hain. Active account header ke dropdown se
+      ya neeche "Use this" se badla jaata hai.
+    </p>
+    <div id="accList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Add-on Services <span class="hint">(Decorator pattern)</span></h2>
+    <p class="sub">
+      Active account par extra features lagao ya hatao. Har feature ek wrapper class hai
+      jo account ke upar chadh jaata hai &mdash; kitne bhi ek saath laga sakte ho, aur
+      account class ka code bilkul nahi badalta.
+    </p>
+    <div id="featureBox"></div>
+    <button class="btn" onclick="saveFeatures()">Save Features</button>
+    <div id="featureResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>Interest Calculator <span class="hint">(Strategy pattern)</span></h2>
+    <p class="sub">
+      Har account type par interest ka formula alag hai. Formula account ke andar nahi,
+      alag strategy class me rakha hai.
+    </p>
+    <div id="interestBox"></div>
+    <button class="btn" onclick="creditInterest()">1 saal ka interest jama karo</button>
+    <div id="interestResult"></div>
+  </div>
+
+  <div class="card">
+    <h2>Open a New Account</h2>
+    <p class="sub">Factory Method &mdash; type chuno, uske rules apne aap lag jaayenge.</p>
+
+    <div class="grid2">
+      <div>
+        <label for="nType">Account Type</label>
+        <select id="nType" onchange="showRules()">
+          <option value="Savings">Savings Account</option>
+          <option value="Current">Current Account</option>
+          <option value="Fixed Deposit">Fixed Deposit Account</option>
+        </select>
+
+        <label for="nOpen">Opening Deposit (Rs.)</label>
+        <input type="number" id="nOpen" value="5000">
+
+        <button class="btn" onclick="openNew()">Open Account</button>
+      </div>
+      <div>
+        <div class="note" id="ruleBox"></div>
+      </div>
+    </div>
+
+    <div id="openResult"></div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+const facade = BankingFacade.getInstance();
+
+if (requireLogin()) {
+  renderHeader("accounts.html");
+  loadAccounts();
+  loadFeatures();
+  loadInterest();
+  showRules();
+}
+
+function loadAccounts() {
+  const mine   = facade.myAccounts();
+  const active = SessionManager.getInstance().get().accNo;
+
+  $("accList").innerHTML = mine.map(function (a) {
+    const state = getAccountState(a.status);
+    const deco  = decorateAccount(a);
+    const isNow = a.accNo === active;
+
+    return '<div class="notif" style="border-left-color:' +
+           (isNow ? "var(--brand)" : "var(--border)") + '">' +
+      '<div class="head">' +
+        '<span class="title">' + a.accNo + " &mdash; " + a.type +
+          (isNow ? ' <span class="pill blue">active</span>' : "") +
+          ' <span class="pill ' + state.getColor() + '">' + state.getName() + "</span></span>" +
+        '<span class="time">Opened ' + a.openedOn + "</span>" +
+      "</div>" +
+      '<div class="body">' +
+        "Balance: <b>Rs. " + money(a.balance) + "</b> &nbsp;|&nbsp; " +
+        "Min: Rs. " + money(a.minBalance) + " &nbsp;|&nbsp; " +
+        "Daily limit: " + (a.dailyLimit === 0 ? "N/A" : "Rs. " + money(a.dailyLimit)) +
+        " &nbsp;|&nbsp; Reward points: " + (a.rewardPoints || 0) + "<br>" +
+        deco.getDescription() +
+        (deco.getMonthlyFee() > 0
+          ? " &nbsp;|&nbsp; Monthly fee Rs. " + money(deco.getMonthlyFee()) : "") +
+      "</div>" +
+      (isNow ? "" :
+        '<button class="btn small" style="margin-top:8px" onclick="useAccount(\'' +
+        a.accNo + '\')">Use this account</button>') +
+    "</div>";
+  }).join("");
+}
+
+function useAccount(accNo) {
+  const session = SessionManager.getInstance();
+  const channel = session.getChannel();
+  session.login(session.getUser().id, accNo);
+  session.setChannel(channel);
+  window.location.reload();
+}
+
+
+/* ---------------- DECORATOR ---------------- */
+
+function loadFeatures() {
+  const acc = facade.activeAccount();
+  const on  = acc.features || [];
+
+  $("featureBox").innerHTML =
+    '<p class="sub">Account: <b>' + acc.accNo + "</b> (" + acc.type + ")</p>" +
+    FEATURE_CATALOG.map(f =>
+      '<label class="check"><input type="checkbox" id="f_' + f.key + '"' +
+      (on.indexOf(f.key) !== -1 ? " checked" : "") + "> <b>" + f.name +
+      "</b> &mdash; " + f.desc + " (Rs. " + f.fee + "/month)</label>").join("");
+}
+
+function saveFeatures() {
+  const picked = FEATURE_CATALOG.filter(f => $("f_" + f.key).checked).map(f => f.key);
+  const acc    = facade.activeAccount();
+  const res    = facade.setFeatures(acc.accNo, picked);
+
+  if (!res.ok) return toast(res.error, "bad");
+
+  $("featureResult").innerHTML =
+    '<div class="result ok"><b>Features updated</b><br>' +
+    "Ab account hai: <b>" + res.description + "</b><br>" +
+    "Total monthly fee: Rs. " + money(res.monthlyFee) + "</div>" +
+    '<p class="sub" style="margin-top:8px">Decorator chain: ' +
+    (picked.length === 0 ? "BasicAccount (koi wrapper nahi)"
+      : "BasicAccount" + picked.map(k => " &rarr; " +
+          FEATURE_CATALOG.find(f => f.key === k).cls).join("")) + "</p>";
+
+  loadAccounts();
+  toast("Add-on services save ho gayi");
+}
+
+
+/* ---------------- STRATEGY ---------------- */
+
+function loadInterest() {
+  const acc  = facade.activeAccount();
+  const proj = interestProjection(acc);
+
+  let rows = "";
+  for (const r of proj.rows) {
+    rows += "<tr><td>" + r.years + " saal</td>" +
+            '<td class="num">Rs. ' + money(r.interest) + "</td>" +
+            '<td class="num">Rs. ' + money(r.maturity) + "</td></tr>";
+  }
+
+  $("interestBox").innerHTML =
+    '<p class="sub">Account <b>' + acc.accNo + "</b> (" + acc.type + ") &mdash; " +
+    "Strategy: <b>" + proj.strategy + "</b> @ " + proj.rate + "%<br>" +
+    "Formula: <code>" + proj.formula + "</code></p>" +
+    '<div class="table-wrap"><table><thead><tr><th>Period</th>' +
+    '<th class="num">Interest</th><th class="num">Maturity Amount</th></tr></thead>' +
+    "<tbody>" + rows + "</tbody></table></div>";
+}
+
+function creditInterest() {
+  const acc = facade.activeAccount();
+  const res = facade.applyInterest(acc.accNo, 1);
+
+  if (!res.ok) {
+    $("interestResult").innerHTML = '<div class="result bad">' + res.error + "</div>";
+    return toast(res.error, "bad");
+  }
+
+  $("interestResult").innerHTML =
+    '<div class="result ok"><b>Interest jama ho gaya</b><br>' +
+    res.strategy + " se Rs. " + money(res.earned) + " mila. " +
+    "Naya balance Rs. " + money(res.balance) + " (ref " + res.txnId + ")</div>";
+
+  loadAccounts();
+  loadInterest();
+  renderHeader("accounts.html");
+  toast("Rs. " + money(res.earned) + " interest jama hua");
+}
+
+
+/* ---------------- FACTORY METHOD ---------------- */
+
+function showRules() {
+  const r = getAccountRules($("nType").value);
+  $("ruleBox").innerHTML =
+    "<b>" + r.type + " ke rules</b><br>" +
+    "Minimum balance: Rs. " + money(r.minBalance) + "<br>" +
+    "Interest: " + r.interest + "%<br>" +
+    "Daily withdrawal limit: " + (r.dailyLimit === 0 ? "N/A" : "Rs. " + money(r.dailyLimit)) + "<br>" +
+    "Withdrawal allowed: " + (r.canWithdraw ? "Haan" : "Nahi");
+}
+
+function openNew() {
+  const made = facade.openAccount($("nType").value, Number($("nOpen").value));
+
+  if (!made.ok) {
+    $("openResult").innerHTML = '<div class="result bad">' + made.error + "</div>";
+    return toast(made.error, "bad");
+  }
+
+  $("openResult").innerHTML =
+    '<div class="result ok"><b>Naya account khul gaya</b><br>' +
+    made.account.accNo + " &mdash; " + made.account.getType() +
+    " &nbsp;|&nbsp; Balance Rs. " + money(made.account.balance) + "<br>" +
+    "Factory: <code>" + getAccountFactory($("nType").value).constructor.name +
+    "</code></div>";
+
+  loadAccounts();
+  renderHeader("accounts.html");
+  toast("Account " + made.account.accNo + " ban gaya");
+}
+</script>
+</body>
+</html>

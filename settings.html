@@ -1,0 +1,186 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Settings</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Alert Settings <span class="hint">(Observer attach / detach)</span></h2>
+    <p class="sub">
+      Yahan se observers ko chalu ya band karo. Jo observer detach hai use transaction
+      ki khabar hi nahi milegi. Account ka code isse bilkul nahi badalta &mdash; yahi
+      loose coupling hai.
+    </p>
+
+    <label class="check"><input type="checkbox" id="pSms">   SMS Alert &mdash; <span id="uMobile"></span></label>
+    <label class="check"><input type="checkbox" id="pEmail"> Email Alert &mdash; <span id="uEmail"></span></label>
+    <label class="check"><input type="checkbox" id="pPush">  App Push Notification</label>
+    <label class="check"><input type="checkbox" id="pLow">   Low Balance Warning</label>
+
+    <div class="note">
+      <b>Database Logger</b> observer hamesha attached rehta hai aur ise band nahi kiya
+      ja sakta, kyunki bank ke liye har transaction ka record rakhna zaroori hai.
+    </div>
+
+    <button class="btn" onclick="savePrefs()">Save Settings</button>
+  </div>
+
+  <div class="card">
+    <h2>Observers That Will Run</h2>
+    <div id="obsList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Channel <span class="hint">(Abstract Factory)</span></h2>
+    <p class="sub">
+      Header ke dropdown se ya yahan se channel badlo. Ek hi click me poori website ka
+      theme, corners, font aur wording badal jaate hain, kyunki factory teeno cheezein
+      ek saath badalti hai.
+    </p>
+
+    <div class="grid3">
+      <button class="btn block" onclick="pickChannel('web')">Web Portal</button>
+      <button class="btn block" onclick="pickChannel('mobile')">Mobile App</button>
+      <button class="btn block" onclick="pickChannel('atm')">ATM Machine</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Channel</th><th>Theme</th><th>Layout</th><th>Wording</th></tr></thead>
+        <tbody id="chBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Profile</h2>
+    <div class="table-wrap"><table id="profTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Danger Zone</h2>
+    <p class="sub">Demo dobara shuru se dikhana ho to poora database reset kar sakte ho.</p>
+    <button class="btn red" onclick="resetAll()">Reset Database &amp; Logout</button>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("settings.html");
+  loadPrefs();
+  loadProfile();
+  loadChannelTable();
+  loadObservers();
+}
+
+function loadPrefs() {
+  const p    = getAlertPrefs();
+  const user = SessionManager.getInstance().getUser();
+
+  $("pSms").checked   = p.sms;
+  $("pEmail").checked = p.email;
+  $("pPush").checked  = p.push;
+  $("pLow").checked   = p.lowBalance;
+
+  $("uMobile").textContent = user.mobile;
+  $("uEmail").textContent  = user.email;
+}
+
+function savePrefs() {
+  saveAlertPrefs({
+    sms:        $("pSms").checked,
+    email:      $("pEmail").checked,
+    push:       $("pPush").checked,
+    lowBalance: $("pLow").checked
+  });
+  loadObservers();
+  toast("Alert settings save ho gayi");
+}
+
+function loadObservers() {
+  const session = SessionManager.getInstance();
+  const subject = buildSubject(session.getUser(), session.getAccount());
+  const names   = subject.getObserverNames();
+
+  $("obsList").innerHTML =
+    '<p class="sub">Agli transaction par ' + names.length + ' observers chalenge:</p>' +
+    names.map(n => '<div class="notif"><div class="title">' + n + "</div></div>").join("");
+}
+
+function pickChannel(code) {
+  SessionManager.getInstance().setChannel(code);
+  window.location.reload();
+}
+
+function loadChannelTable() {
+  const rows = [
+    ["web",    "Web Portal"],
+    ["mobile", "Mobile App"],
+    ["atm",    "ATM Machine"]
+  ];
+  const now = SessionManager.getInstance().getChannel();
+
+  $("chBody").innerHTML = rows.map(function (r) {
+    const f = getChannelFactory(r[0]);
+    const t = f.createTheme(), l = f.createLayout(), w = f.createWording();
+    const mark = (r[0] === now) ? ' <span class="pill green">active</span>' : "";
+    return "<tr>" +
+      "<td><b>" + f.getName() + "</b>" + mark + "</td>" +
+      "<td>" + t.constructor.name + "<br><span class='hint'>" + t.vars()["--brand"] + "</span></td>" +
+      "<td>" + l.constructor.name + "<br><span class='hint'>radius " + l.vars()["--radius"] + "</span></td>" +
+      "<td>" + w.constructor.name + "<br><span class='hint'>\"" + w.payButton() + "\"</span></td>" +
+    "</tr>";
+  }).join("");
+}
+
+function loadProfile() {
+  const session = SessionManager.getInstance();
+  const user    = session.getUser();
+  const acc     = new AccountProxy(session.get().accNo, user.id).getDetails();
+  const s       = session.get();
+
+  $("profTable").innerHTML =
+    "<tr><th>Name</th><td>" + user.name + "</td></tr>" +
+    "<tr><th>Email</th><td>" + user.email + "</td></tr>" +
+    "<tr><th>Mobile</th><td>" + user.mobile + "</td></tr>" +
+    "<tr><th>Account No</th><td>" + acc.accNo + "</td></tr>" +
+    "<tr><th>Account Type</th><td>" + acc.type + "</td></tr>" +
+    "<tr><th>Opened On</th><td>" + acc.openedOn + "</td></tr>" +
+    "<tr><th>Logged in at</th><td>" + s.loginTime + "</td></tr>";
+}
+
+function resetAll() {
+  if (!confirm("Poora database mit jaayega aur demo data wapas aa jaayega. Sure?")) return;
+  DatabaseConnection.getInstance().dropDatabase();
+  Store.api.removeItem("sb_prefs");
+  window.location.href = "index.html";
+}
+</script>
+</body>
+</html>

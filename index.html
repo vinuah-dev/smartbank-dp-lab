@@ -1,0 +1,176 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Login</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-box">
+    <h1>SmartBank</h1>
+    <p class="sub">Internet Banking Login</p>
+
+    <div class="tabs">
+      <button id="tabLogin" class="active" onclick="showTab('login')">Login</button>
+      <button id="tabReg" onclick="showTab('register')">Open New Account</button>
+    </div>
+
+    <!-- ---------- LOGIN ---------- -->
+    <div id="loginForm">
+      <label for="lEmail">Email</label>
+      <input type="email" id="lEmail" placeholder="ramesh@smartbank.in">
+
+      <label for="lPass">Password</label>
+      <input type="password" id="lPass" placeholder="1234">
+
+      <button class="btn block" onclick="doLogin()">Login</button>
+
+      <div class="demo-box">
+        <b>Demo accounts</b><br>
+        ramesh@smartbank.in &nbsp;/&nbsp; 1234 &nbsp;(2 accounts)<br>
+        sneha@smartbank.in &nbsp;/&nbsp; 1234<br>
+        amit@smartbank.in &nbsp;/&nbsp; 1234<br>
+        <b>Bank staff:</b> manager@smartbank.in &nbsp;/&nbsp; admin
+      </div>
+    </div>
+
+    <!-- ---------- REGISTER ---------- -->
+    <div id="regForm" style="display:none">
+      <label for="rName">Full Name</label>
+      <input type="text" id="rName" placeholder="Your name">
+
+      <label for="rEmail">Email</label>
+      <input type="email" id="rEmail" placeholder="you@example.com">
+
+      <label for="rMobile">Mobile</label>
+      <input type="text" id="rMobile" placeholder="+91-9000000000">
+
+      <label for="rPass">Password</label>
+      <input type="password" id="rPass">
+
+      <label for="rType">Account Type</label>
+      <select id="rType">
+        <option value="Savings">Savings &ndash; 4% interest, min Rs. 1,000</option>
+        <option value="Current">Current &ndash; 0% interest, min Rs. 10,000</option>
+        <option value="Fixed Deposit">Fixed Deposit &ndash; 7.5%, min Rs. 25,000</option>
+      </select>
+
+      <label for="rOpen">Opening Deposit (Rs.)</label>
+      <input type="number" id="rOpen" value="5000">
+
+      <button class="btn block" onclick="doRegister()">Open Account</button>
+
+      <div class="demo-box">
+        Account <b>Factory Method</b> pattern se banta hai &ndash; type ke hisaab se
+        alag factory chalti hai aur uske rules apne aap lag jaate hain.
+      </div>
+    </div>
+
+    <div id="msg" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+seedDatabase();
+
+// pehle se login hai to seedha andar bhej do
+if (SessionManager.getInstance().isLoggedIn()) {
+  window.location.href = isStaff() ? "admin.html" : "dashboard.html";
+}
+
+function showTab(which) {
+  const login = which === "login";
+  $("loginForm").style.display = login ? "block" : "none";
+  $("regForm").style.display   = login ? "none"  : "block";
+  $("tabLogin").className = login ? "active" : "";
+  $("tabReg").className   = login ? "" : "active";
+  $("msg").innerHTML = "";
+}
+
+function say(text, bad) {
+  $("msg").innerHTML = '<div class="result ' + (bad ? "bad" : "ok") + '">' + text + '</div>';
+}
+
+function doLogin() {
+  const db    = DatabaseConnection.getInstance();
+  const email = $("lEmail").value.trim().toLowerCase();
+  const pass  = $("lPass").value;
+
+  const user = db.selectOne("users", u => u.email.toLowerCase() === email);
+
+  if (user === null)          return say("Is email se koi account nahi mila.", true);
+  if (user.password !== pass) return say("Password galat hai.", true);
+
+  // bank staff ka apna console hai, uska koi account nahi hota
+  if (user.role === "staff") {
+    SessionManager.getInstance().login(user.id, null);
+    window.location.href = "admin.html";
+    return;
+  }
+
+  const acc = db.selectOne("accounts", a => a.userId === user.id);
+  if (acc === null) return say("Is user ka koi account nahi hai.", true);
+
+  SessionManager.getInstance().login(user.id, acc.accNo);
+  window.location.href = "dashboard.html";
+}
+
+function doRegister() {
+  const db = DatabaseConnection.getInstance();
+
+  const name   = $("rName").value.trim();
+  const email  = $("rEmail").value.trim();
+  const mobile = $("rMobile").value.trim();
+  const pass   = $("rPass").value;
+  const type   = $("rType").value;
+  const open   = Number($("rOpen").value);
+
+  if (!name || !email || !mobile || !pass) return say("Saare fields bhariye.", true);
+
+  if (db.selectOne("users", u => u.email.toLowerCase() === email.toLowerCase())) {
+    return say("Ye email pehle se registered hai.", true);
+  }
+
+  // user banane se pehle hi rules check kar lo
+  const rules = getAccountRules(type);
+  if (open < rules.minBalance) {
+    return say(rules.type + " account ke liye kam se kam Rs. " +
+               money(rules.minBalance) + " chahiye.", true);
+  }
+
+  const user = db.insert("users", {
+    name: name, email: email, mobile: mobile, password: pass, role: "customer"
+  });
+
+  // ---- FACTORY METHOD ----
+  const made = getAccountFactory(type).openAccount(user.id, open);
+
+  if (!made.ok) {
+    return say(made.error, true);
+  }
+
+  SessionManager.getInstance().login(user.id, made.account.accNo);
+  window.location.href = "dashboard.html";
+}
+</script>
+</body>
+</html>

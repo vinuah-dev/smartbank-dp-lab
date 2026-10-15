@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Patterns Used</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Design Patterns Used in SmartBank</h2>
+    <p class="sub">
+      Ye koi alag demo page nahi hai. Neeche likhe saare <b>14 patterns</b> isi website
+      ke andar chal rahe hain &mdash; jo bhi transaction aap karte ho wo inhi classes se
+      guzarta hai. Har pattern ke saath "Live proof" me likha hai use apni aankhon se
+      kahan dekh sakte ho.
+    </p>
+
+    <h3>Lab experiments ke 7 patterns</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Experiment</th><th>Patterns</th><th>File</th></tr></thead>
+        <tbody>
+          <tr><td>Experiment 1</td><td>Singleton, Chain of Responsibility</td><td><code>js/core.js</code>, <code>js/approval.js</code></td></tr>
+          <tr><td>Experiment 2</td><td>Factory Method, Proxy</td><td><code>js/accounts.js</code></td></tr>
+          <tr><td>Experiment 3</td><td>Abstract Factory, Bridge</td><td><code>js/channels.js</code>, <code>js/payments.js</code></td></tr>
+          <tr><td>Experiment 4</td><td>Observer + Database</td><td><code>js/observer.js</code>, <code>js/core.js</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Extra 7 patterns (system ko poora banane ke liye)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pattern</th><th>Type</th><th>File</th><th>Kaam</th></tr></thead>
+        <tbody>
+          <tr><td>State</td><td>Behavioural</td><td><code>js/state.js</code></td><td>Account Active / Frozen / Closed</td></tr>
+          <tr><td>Strategy</td><td>Behavioural</td><td><code>js/strategy.js</code></td><td>Interest ka formula</td></tr>
+          <tr><td>Command</td><td>Behavioural</td><td><code>js/command.js</code></td><td>Transaction undo aur reversal</td></tr>
+          <tr><td>Decorator</td><td>Structural</td><td><code>js/decorator.js</code></td><td>Account ke add-on features</td></tr>
+          <tr><td>Adapter</td><td>Structural</td><td><code>js/adapter.js</code></td><td>Third party wallet ko jodna</td></tr>
+          <tr><td>Facade</td><td>Structural</td><td><code>js/facade.js</code></td><td>Poore system ka ek darwaza</td></tr>
+          <tr><td>Builder</td><td>Creational</td><td><code>js/builder.js</code></td><td>Transaction request banana</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ---------------- EXPERIMENT 1 ---------------- -->
+  <div class="card">
+    <h2>Experiment 1</h2>
+
+    <div class="pat">
+      <div class="name">1. Singleton <span class="pill grey">Creational</span></div>
+      <div class="where">File: <code>js/core.js</code></div>
+      <p>Paanch classes Singleton hain kyunki inka ek se zyada object hona galat hoga:</p>
+      <ul style="margin:8px 0 8px 20px;font-size:14px">
+        <li><code>BankConfig</code> &mdash; bank ka naam, IFSC aur approval limits</li>
+        <li><code>DatabaseConnection</code> &mdash; ek hi database connection</li>
+        <li><code>SessionManager</code> &mdash; kaun login hai</li>
+        <li><code>CommandInvoker</code> &mdash; command history</li>
+        <li><code>BankingFacade</code> &mdash; system ka single entry point</li>
+      </ul>
+      <p><b>Live proof:</b> <a href="history.html">History page</a> ke neeche
+         <code>getInstance() === getInstance()</code> ka result dikhta hai.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">2. Chain of Responsibility <span class="pill grey">Behavioural</span></div>
+      <div class="where">File: <code>js/approval.js</code></div>
+      <p>
+        Har paisa nikalne wali request is chain se guzarti hai:
+        <b>Account Status &rarr; Fraud Check &rarr; Clerk (10K) &rarr; Manager (1L) &rarr;
+        Branch Head (10L) &rarr; Rejected</b>. Jo handler sambhal sakta hai wahi approve
+        karta hai, warna aage bhej deta hai.
+      </p>
+      <div class="note">
+        Baad me humne chain me <b>Account Status</b> naam ka naya handler joda &mdash;
+        aur kisi bhi purani class ko haath nahi lagana pada. Yahi is pattern ka asli fayda hai.
+      </div>
+      <p><b>Live proof:</b> <a href="banking.html">Withdraw</a> ya
+         <a href="transfer.html">Transfer</a> karo &mdash; result me poora approval trail
+         dikhta hai ki kis handler ne kya kiya.</p>
+    </div>
+  </div>
+
+  <!-- ---------------- EXPERIMENT 2 ---------------- -->
+  <div class="card">
+    <h2>Experiment 2</h2>
+
+    <div class="pat">
+      <div class="name">3. Factory Method <span class="pill grey">Creational</span></div>
+      <div class="where">File: <code>js/accounts.js</code></div>
+      <p>
+        <code>AccountFactory.openAccount()</code> me sab common kaam hai, lekin asli
+        object <code>createAccount()</code> banata hai jise har subclass override karti
+        hai &mdash; <code>SavingsAccountFactory</code>, <code>CurrentAccountFactory</code>,
+        <code>FDAccountFactory</code>. Har account type ke rules apne aap lag jaate hain.
+      </p>
+      <p><b>Live proof:</b> <a href="accounts.html">My Accounts</a> par naya account kholo
+         &mdash; type badalte hi rules ka box badal jaata hai.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">4. Proxy <span class="pill grey">Structural</span></div>
+      <div class="where">File: <code>js/accounts.js</code></div>
+      <p>Website kabhi bhi <code>RealAccountService</code> ko seedha use nahi karti.
+         Beech me <code>AccountProxy</code> hai jo teen kaam karta hai:</p>
+      <ul style="margin:8px 0 8px 20px;font-size:14px">
+        <li><b>Protection proxy</b> &mdash; logged-in user hi account ka owner hai ya nahi</li>
+        <li><b>Virtual proxy</b> &mdash; real object sirf zaroorat padne par banta hai</li>
+        <li><b>Logging proxy</b> &mdash; har access <code>access_log</code> table me jaata hai</li>
+      </ul>
+      <p><b>Live proof:</b> <a href="history.html">History page</a> par "Account Access
+         Log" table dekho. Admin console par poore bank ka access log dikhta hai jisme
+         DENIED entries bhi hoti hain.</p>
+    </div>
+  </div>
+
+  <!-- ---------------- EXPERIMENT 3 ---------------- -->
+  <div class="card">
+    <h2>Experiment 3</h2>
+
+    <div class="pat">
+      <div class="name">5. Abstract Factory <span class="pill grey">Creational</span></div>
+      <div class="where">File: <code>js/channels.js</code></div>
+      <p>
+        SmartBank teen channel par chalta hai. Har channel ke liye ek poori family chahiye:
+        <code>Theme</code> + <code>Layout</code> + <code>Wording</code>.
+        <code>ATMFactory</code>, <code>MobileAppFactory</code> aur
+        <code>WebPortalFactory</code> teeno cheezein ek saath deti hain, isliye galat
+        family kabhi mix nahi hoti.
+      </p>
+      <p><b>Live proof:</b> Header ke dropdown se channel badlo &mdash; colours, corners,
+         font aur button ka text sab ek saath badal jaate hain.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">6. Bridge <span class="pill grey">Structural</span></div>
+      <div class="where">File: <code>js/payments.js</code></div>
+      <p>
+        Payment ka <i>kaam</i> (Transfer / Bill / Recharge) aur payment ka <i>raasta</i>
+        (UPI / Card / Net Banking / Wallet) do alag hierarchy hain. Abstraction ke andar
+        gateway ka reference rakha hai &mdash; wahi bridge hai.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>UPI</th><th>Card</th><th>Net Banking</th><th>QuickPay Wallet</th></tr></thead>
+          <tbody>
+            <tr><td><b>Money Transfer</b></td><td>works</td><td>works</td><td>works</td><td>works</td></tr>
+            <tr><td><b>Bill Payment</b></td><td>works</td><td>works</td><td>works</td><td>works</td></tr>
+            <tr><td><b>Mobile Recharge</b></td><td>works</td><td>works</td><td>works</td><td>works</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:10px">
+        12 combinations chalte hain lekin classes sirf <b>3 + 4 = 7</b> hain.
+        Inheritance se karte to 12 classes banti.
+      </p>
+      <p><b>Live proof:</b> <a href="transfer.html">Transfer</a> aur
+         <a href="payments.html">Bills &amp; Recharge</a> par gateway badal kar dekho
+         &mdash; fee aur processing steps gateway ke hisaab se badalte hain.</p>
+    </div>
+  </div>
+
+  <!-- ---------------- EXPERIMENT 4 ---------------- -->
+  <div class="card">
+    <h2>Experiment 4</h2>
+
+    <div class="pat">
+      <div class="name">7. Observer + Database <span class="pill grey">Behavioural</span></div>
+      <div class="where">File: <code>js/observer.js</code> (database layer <code>js/core.js</code>)</div>
+      <p>Balance badalte hi <code>TransactionSubject</code> apne saare observers ko
+         <code>update()</code> bhejta hai. Paanch observers hain:</p>
+      <ul style="margin:8px 0 8px 20px;font-size:14px">
+        <li><code>SMSObserver</code> &mdash; mobile par SMS</li>
+        <li><code>EmailObserver</code> &mdash; email alert</li>
+        <li><code>AppPushObserver</code> &mdash; app notification</li>
+        <li><code>LowBalanceObserver</code> &mdash; sirf tab bolta hai jab balance minimum se neeche jaaye</li>
+        <li><code>DatabaseLoggerObserver</code> &mdash; transaction ko DB me save karta hai</li>
+      </ul>
+      <p><b>Live proof:</b> <a href="settings.html">Settings</a> se koi alert band karo,
+         phir transaction karo &mdash; <a href="notifications.html">Notifications</a> me wo
+         message aayega hi nahi, baaki sab aayenge.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">Database Connectivity</div>
+      <div class="where">File: <code>js/core.js</code> &rarr; class <code>DatabaseConnection</code></div>
+      <p>
+        Browser se MySQL/Oracle seedha connect nahi hota, isliye browser ka
+        <code>localStorage</code> database ki tarah use kiya hai. Uske upar SQL jaisa
+        layer banaya hai &mdash; <code>connect()</code>, <code>insert()</code>,
+        <code>select()</code>, <code>update()</code>, <code>truncate()</code>.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Table</th><th>Kya store hota hai</th></tr></thead>
+          <tbody>
+            <tr><td><code>users</code></td><td>Customers aur bank staff</td></tr>
+            <tr><td><code>accounts</code></td><td>Account number, type, balance, status, features</td></tr>
+            <tr><td><code>transactions</code></td><td>Har transaction ka record</td></tr>
+            <tr><td><code>notifications</code></td><td>SMS / Email / Push messages</td></tr>
+            <tr><td><code>access_log</code></td><td>Proxy ka access record</td></tr>
+            <tr><td><code>command_log</code></td><td>Command history (undo ke liye)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------- EXTRA PATTERNS ---------------- -->
+  <div class="card">
+    <h2>Extra Patterns</h2>
+
+    <div class="pat">
+      <div class="name">8. State <span class="pill grey">Behavioural</span></div>
+      <div class="where">File: <code>js/state.js</code></div>
+      <p>
+        Account teen halat me ho sakta hai. Har halat ki apni class hai jo khud batati hai
+        kya allowed hai: <code>ActiveState</code> (sab kuch),
+        <code>FrozenState</code> (paisa aa sakta hai, ja nahi sakta),
+        <code>ClosedState</code> (kuch bhi nahi). Isse code me
+        <code>if (status == "frozen")</code> jaisi lines har jagah nahi likhni padti.
+      </p>
+      <p><b>Live proof:</b> Staff login se <a href="admin.html">Bank Console</a> me kisi
+         account ko Freeze karo, phir us customer se withdraw karke dekho &mdash; approval
+         chain ka pehla hi handler rok dega. Deposit phir bhi chalega.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">9. Strategy <span class="pill grey">Behavioural</span></div>
+      <div class="where">File: <code>js/strategy.js</code></div>
+      <p>
+        Interest ka formula account class ke andar nahi hai. Har scheme ki apni class hai:
+        <code>SimpleInterestStrategy</code> (Savings 4%),
+        <code>CompoundInterestStrategy</code> (FD 7.5%, har 3 mahine),
+        <code>NoInterestStrategy</code> (Current). Naya scheme aane par sirf ek nayi class
+        banegi, purani ek bhi nahi badlegi.
+      </p>
+      <p><b>Live proof:</b> <a href="accounts.html">My Accounts</a> par Interest Calculator
+         dekho &mdash; account badalte hi formula aur numbers dono badal jaate hain.
+         "Interest jama karo" dabao to wo asli me credit ho jaata hai.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">10. Command <span class="pill grey">Behavioural</span></div>
+      <div class="where">File: <code>js/command.js</code></div>
+      <p>
+        Har transaction ek <code>TransactionCommand</code> object hai jisme
+        <code>execute()</code> ke saath <code>undo()</code> bhi hai.
+        <code>CommandInvoker</code> history rakhta hai (database ke
+        <code>command_log</code> table me), isliye page badalne par bhi undo kaam karta hai.
+      </p>
+      <p><b>Live proof:</b> <a href="banking.html">Deposit / Withdraw</a> page ke neeche
+         "Undo Last Transaction". Staff <a href="admin.html">Bank Console</a> se kisi bhi
+         purani transaction ko Reverse kar sakta hai &mdash; balance wapas theek hota hai,
+         original row par REVERSED lagta hai, aur customer ko alert chala jaata hai.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">11. Decorator <span class="pill grey">Structural</span></div>
+      <div class="where">File: <code>js/decorator.js</code></div>
+      <p>
+        Account par extra services chadhayi ja sakti hain &mdash; Cashback, Overdraft,
+        Insurance, Reward Points. Har feature ek wrapper class hai jo account ke upar
+        chadh jaata hai. Har combination ke liye nayi class banane ki zaroorat nahi.
+      </p>
+      <div class="note">
+        Ye features sach me kaam karte hain: Cashback bill/recharge par 1% wapas deta hai,
+        Overdraft balance khatam hone par bhi Rs. 10,000 tak nikalne deta hai (approval
+        chain usko dekhta hai), aur Reward Points har kharch par jamte hain.
+      </div>
+      <p><b>Live proof:</b> <a href="accounts.html">My Accounts</a> par features tick karke
+         save karo, phir bill pay karke dekho &mdash; cashback wapas aa jaayega.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">12. Adapter <span class="pill grey">Structural</span></div>
+      <div class="where">File: <code>js/adapter.js</code></div>
+      <p>
+        "QuickPay" ek third party wallet service hai jiska code hum badal nahi sakte.
+        Uska interface bilkul alag hai &mdash; wo <b>paise</b> me amount leta hai,
+        method ke naam alag hain (<code>walletTransfer</code>,
+        <code>fetchCommission</code>), aur result me <code>statusCode</code> deta hai.
+      </p>
+      <p>
+        <code>WalletGatewayAdapter</code> beech me khada hokar use humare
+        <code>PaymentGateway</code> jaisa bana deta hai. Isliye QuickPay bhi Bridge
+        pattern me waise hi lagta hai jaise UPI ya Card &mdash; baaki code ko pata bhi
+        nahi chalta ki ye bahar wali service hai.
+      </p>
+      <p><b>Live proof:</b> <a href="transfer.html">Transfer</a> par gateway me
+         "QuickPay Wallet" chuno &mdash; result me adapter ke conversion steps dikhte hain.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">13. Facade <span class="pill grey">Structural</span></div>
+      <div class="where">File: <code>js/facade.js</code></div>
+      <p>
+        System me ab bahut hisse hain &mdash; proxy, approval chain, gateways, observers,
+        commands, state, decorators. Har page ko in sabse alag alag baat karni pade to code
+        ganda ho jaayega. <code>BankingFacade</code> ek simple darwaza hai:
+        <code>transact()</code>, <code>undoLast()</code>, <code>setStatus()</code>,
+        <code>applyInterest()</code>, <code>statement()</code>.
+      </p>
+      <p><b>Live proof:</b> Kisi bhi page ka <code>&lt;script&gt;</code> dekho &mdash; wo
+         sirf <code>BankingFacade.getInstance()</code> se baat karta hai.</p>
+    </div>
+
+    <div class="pat">
+      <div class="name">14. Builder <span class="pill grey">Creational</span></div>
+      <div class="where">File: <code>js/builder.js</code></div>
+      <p>
+        Transaction request me bahut fields hain. Sab constructor me daalne ke bajaye
+        builder step by step banata hai aur <code>build()</code> par check karta hai:
+      </p>
+      <div class="output" style="background:#1e1e1e;color:#d4f7d4;font-family:monospace;
+           font-size:13px;padding:12px;border-radius:5px;white-space:pre-wrap">TransactionBuilder.create()
+    .debit()
+    .type("Transfer")
+    .amount(5000)
+    .via("transfer", "upi")     // Bridge
+    .to("SB123456")
+    .remark("Rent")
+    .build();</div>
+      <p style="margin-top:10px"><b>Live proof:</b> <a href="transfer.html">Transfer</a>
+         page ka source dekho &mdash; bilkul yahi code hai.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ek transaction me kya kya chalta hai</h2>
+    <p class="sub">Jab aap "Send Money" dabate ho to ye order chalta hai:</p>
+    <ol style="margin-left:20px;font-size:14px;line-height:1.9">
+      <li><b>Builder</b> &mdash; page request object banata hai</li>
+      <li><b>Facade</b> &mdash; request <code>BankingFacade.transact()</code> ko jaati hai</li>
+      <li><b>Command</b> &mdash; ek <code>TransactionCommand</code> banta hai aur invoker use chalata hai</li>
+      <li><b>Singleton</b> &mdash; config, database aur session ek hi jagah se milte hain</li>
+      <li><b>Proxy</b> &mdash; owner check hota hai aur access log hota hai</li>
+      <li><b>Decorator</b> &mdash; account ke add-ons padhe jaate hain (overdraft limit)</li>
+      <li><b>Bridge</b> (+ <b>Adapter</b> agar wallet hai) &mdash; gateway ki fee nikalti hai</li>
+      <li><b>State</b> &mdash; account Active hai ya nahi</li>
+      <li><b>Chain of Responsibility</b> &mdash; amount approval chain se guzarti hai</li>
+      <li><b>Bridge</b> &mdash; gateway payment process karta hai</li>
+      <li><b>Proxy</b> &mdash; balance update hota hai</li>
+      <li><b>Observer</b> &mdash; sabhi alerts jaate hain aur DB me row insert hoti hai</li>
+      <li><b>Decorator</b> &mdash; cashback aur reward points milte hain</li>
+    </ol>
+    <div class="note">
+      Ye poora flow <code>js/app.js</code> ke <code>executeTransaction()</code> function me
+      hai &mdash; viva me yahi function dikhana sabse acha rahega.
+    </div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("patterns.html");
+}
+</script>
+</body>
+</html>

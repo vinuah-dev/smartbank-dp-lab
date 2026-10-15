@@ -1,0 +1,208 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Deposit / Withdraw</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="balance-card" style="margin-bottom:18px">
+    <div class="label">AVAILABLE BALANCE</div>
+    <div class="amount" id="balAmount">Rs. 0</div>
+    <div class="meta" id="balMeta"></div>
+  </div>
+
+  <div class="grid2">
+
+    <div class="card">
+      <h2>Deposit Money</h2>
+      <p class="sub">Paisa jama karne ke liye approval ki zaroorat nahi hoti,
+         lekin alert phir bhi jaate hain.</p>
+
+      <label for="dAmount">Amount (Rs.)</label>
+      <input type="number" id="dAmount" value="5000">
+
+      <label for="dMode">Deposit Mode</label>
+      <select id="dMode">
+        <option>Cash at Branch</option>
+        <option>Cheque</option>
+        <option>Cash Deposit Machine</option>
+      </select>
+
+      <button class="btn" onclick="doDeposit()">Deposit</button>
+    </div>
+
+    <div class="card">
+      <h2>Withdraw Money</h2>
+      <p class="sub">Har withdrawal approval chain se guzarti hai:
+         Fraud Check &rarr; Clerk &rarr; Manager &rarr; Branch Head.</p>
+
+      <label for="wAmount">Amount (Rs.)</label>
+      <input type="number" id="wAmount" value="8000">
+
+      <label for="wMode">Withdrawal Mode</label>
+      <select id="wMode">
+        <option>ATM</option>
+        <option>Branch Counter</option>
+      </select>
+
+      <button class="btn" onclick="doWithdraw()">Withdraw</button>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <h2>Transaction Result</h2>
+    <div id="result"><p class="empty">Upar se koi transaction karo, poori detail yahan dikhegi.</p></div>
+  </div>
+
+  <div class="card">
+    <h2>Undo <span class="hint">(Command pattern)</span></h2>
+    <p class="sub">
+      Har transaction ek <code>TransactionCommand</code> object hai jisme
+      <code>execute()</code> ke saath <code>undo()</code> bhi hai. Isliye galti se ki hui
+      transaction wapas ho sakti hai &mdash; balance theek ho jaata hai aur ek reversal
+      entry ban jaati hai.
+    </p>
+    <div id="undoBox" class="note"></div>
+  </div>
+
+  <div class="card">
+    <h2>Approval Limits <span class="hint">(Chain of Responsibility)</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Handler</th><th>Handles</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>Account Status</td><td>Every request</td><td>Account Active hai ya Frozen/Closed (State pattern)</td></tr>
+          <tr><td>Fraud Check</td><td>Every request</td><td>Balance, overdraft, daily limit aur account type check karta hai</td></tr>
+          <tr><td>Clerk</td><td>Upto Rs. 10,000</td><td>Chhoti amount khud approve karta hai</td></tr>
+          <tr><td>Manager</td><td>Upto Rs. 1,00,000</td><td>Medium amount approve karta hai</td></tr>
+          <tr><td>Branch Head</td><td>Upto Rs. 10,00,000</td><td>Badi amount approve karta hai</td></tr>
+          <tr><td>&mdash;</td><td>Isse zyada</td><td>Request reject ho jaati hai</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      Try karo: Rs. 8,000 (Clerk), Rs. 60,000 (Manager), Rs. 3,00,000 (Branch Head),
+      Rs. 60,00,000 (reject). Daily limit se zyada nikaloge to Fraud Check hi rok dega.
+    </div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("banking.html");
+  showBalance();
+  showUndo();
+}
+
+function showBalance() {
+  const facade = BankingFacade.getInstance();
+  const acc    = facade.details(facade.activeAccount().accNo);
+  const state  = getAccountState(acc.status);
+
+  $("balAmount").textContent = "Rs. " + money(acc.balance);
+  $("balMeta").innerHTML     = acc.type + " Account  |  " + acc.accNo +
+                               "  |  Daily limit Rs. " + money(acc.dailyLimit) +
+                               '  |  <span class="pill ' + state.getColor() + '">' +
+                               state.getName() + "</span>";
+}
+
+function doDeposit() {
+  try {
+    // BUILDER se request banayi, FACADE se chalayi
+    const request = TransactionBuilder.create()
+      .credit()
+      .type("Deposit")
+      .amount($("dAmount").value)
+      .mode($("dMode").value)
+      .remark("Deposit via " + $("dMode").value)
+      .build();
+
+    finish(BankingFacade.getInstance().transact(request), "Paisa jama ho gaya");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+}
+
+function doWithdraw() {
+  try {
+    const request = TransactionBuilder.create()
+      .debit()
+      .type("Withdrawal")
+      .amount($("wAmount").value)
+      .mode($("wMode").value)
+      .remark("Withdrawal from " + $("wMode").value)
+      .build();
+
+    finish(BankingFacade.getInstance().transact(request), "Paisa nikal liya");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+}
+
+function doUndo() {
+  const result = BankingFacade.getInstance().undoLast();
+
+  if (result.ok) {
+    $("result").innerHTML =
+      '<div class="result ok"><b>Undo Successful</b><br>' +
+      result.label + ' reverse kar di gayi.<br>' +
+      'Reversal ref: ' + result.refId +
+      ' &nbsp;|&nbsp; New Balance: Rs. ' + money(result.balance) + '</div>' +
+      '<p class="sub" style="margin-top:10px">Command pattern ke undo() ne balance wapas ' +
+      'theek kiya, original row par REVERSED ka nishaan lagaya aur ek reversal entry banayi.</p>';
+    toast("Last transaction undo ho gayi");
+  } else {
+    $("result").innerHTML = '<div class="result bad"><b>Undo nahi ho saka</b><br>' +
+                            result.error + '</div>';
+    toast(result.error, "bad");
+  }
+
+  showBalance();
+  renderHeader("banking.html");
+  showUndo();
+}
+
+function showUndo() {
+  const entry = BankingFacade.getInstance().canUndo();
+  $("undoBox").innerHTML = entry
+    ? 'Last transaction: <b>' + entry.label + '</b> (' + entry.time + ')' +
+      '<br><button class="btn red" onclick="doUndo()">Undo Last Transaction</button>'
+    : '<span class="hint">Abhi undo karne ke liye koi transaction nahi hai.</span>';
+}
+
+function finish(result, okMsg) {
+  renderResult($("result"), result);
+  showBalance();
+  showUndo();
+  toast(result.ok ? okMsg : result.error, result.ok ? "ok" : "bad");
+  if (result.ok) renderHeader("banking.html");   // bell count refresh
+}
+</script>
+</body>
+</html>

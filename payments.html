@@ -1,0 +1,191 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Bills &amp; Recharge</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="balance-card" style="margin-bottom:18px">
+    <div class="label">AVAILABLE BALANCE</div>
+    <div class="amount" id="balAmount">Rs. 0</div>
+    <div class="meta" id="balMeta"></div>
+  </div>
+
+  <div class="note">
+    Neeche do alag <b>abstractions</b> hain (Bill Payment aur Mobile Recharge) aur chaar
+    <b>implementations</b> (UPI, Card, Net Banking, QuickPay Wallet). Koi bhi combination
+    chalega &mdash; yahi <b>Bridge</b> pattern ka fayda hai. QuickPay ek third party
+    service hai jo <b>Adapter</b> pattern se jodi gayi hai.
+  </div>
+
+  <div class="grid2">
+
+    <!-- ---------- BILL PAYMENT ---------- -->
+    <div class="card">
+      <h2>Pay a Bill</h2>
+      <p class="sub">Abstraction: <code>BillPayment</code></p>
+
+      <label for="biller">Biller</label>
+      <select id="biller">
+        <option>Mahanagar Electricity</option>
+        <option>City Water Supply</option>
+        <option>BharatGas Piped Gas</option>
+        <option>SpeedNet Broadband</option>
+      </select>
+
+      <label for="consumerNo">Consumer Number</label>
+      <input type="text" id="consumerNo" value="MH-4457821">
+
+      <label for="bAmount">Bill Amount (Rs.)</label>
+      <input type="number" id="bAmount" value="2450" oninput="updateFee('b')">
+
+      <label for="bGateway">Pay Using <span class="hint">(Implementation)</span></label>
+      <select id="bGateway" onchange="updateFee('b')"></select>
+
+      <div class="note" id="bFee"></div>
+      <button class="btn" id="bBtn" onclick="payBill()">Pay Bill</button>
+    </div>
+
+    <!-- ---------- RECHARGE ---------- -->
+    <div class="card">
+      <h2>Mobile Recharge</h2>
+      <p class="sub">Abstraction: <code>MobileRecharge</code></p>
+
+      <label for="rMobile">Mobile Number</label>
+      <input type="text" id="rMobile" value="+91-9876543210">
+
+      <label for="rPlan">Recharge Plan</label>
+      <select id="rPlan" onchange="planChanged()">
+        <option value="199">Rs. 199 &ndash; 1.5GB/day, 28 days</option>
+        <option value="299" selected>Rs. 299 &ndash; 2GB/day, 28 days</option>
+        <option value="666">Rs. 666 &ndash; 1.5GB/day, 84 days</option>
+        <option value="2999">Rs. 2999 &ndash; 2.5GB/day, 365 days</option>
+      </select>
+
+      <label for="rGateway">Pay Using <span class="hint">(Implementation)</span></label>
+      <select id="rGateway" onchange="updateFee('r')"></select>
+
+      <div class="note" id="rFee"></div>
+      <button class="btn" id="rBtn" onclick="doRecharge()">Recharge Now</button>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <h2>Transaction Result</h2>
+    <div id="result"><p class="empty">Koi payment karo, poori detail yahan dikhegi.</p></div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("payments.html");
+  fillGateways("bGateway");
+  fillGateways("rGateway");
+  showBalance();
+  updateFee("b");
+  updateFee("r");
+  $("bBtn").textContent = CURRENT_WORDING.payButton();
+  $("rBtn").textContent = CURRENT_WORDING.payButton();
+}
+
+function fillGateways(id) {
+  $(id).innerHTML = GATEWAY_OPTIONS.map(g =>
+    '<option value="' + g.code + '">' + g.label + "</option>").join("");
+}
+
+function showBalance() {
+  const facade = BankingFacade.getInstance();
+  const acc    = facade.details(facade.activeAccount().accNo);
+  const deco   = decorateAccount(acc);
+
+  $("balAmount").textContent = "Rs. " + money(acc.balance);
+  $("balMeta").innerHTML     = deco.getDescription() + "  |  " + acc.accNo +
+    (deco.getCashback("Bill Payment", 10000) > 0
+      ? '  |  <span class="pill green">1% cashback active</span>' : "");
+}
+
+function planChanged() { updateFee("r"); }
+
+function rechargeAmount() { return Number($("rPlan").value); }
+
+function updateFee(which) {
+  const isBill  = which === "b";
+  const amount  = isBill ? (Number($("bAmount").value) || 0) : rechargeAmount();
+  const gateway = getGateway($(isBill ? "bGateway" : "rGateway").value);
+  const fee     = gateway.getFee(amount);
+
+  $(isBill ? "bFee" : "rFee").innerHTML =
+    "Amount Rs. " + money(amount) +
+    " + " + gateway.getName() + " fee Rs. " + money(fee) +
+    " = <b>Rs. " + money(amount + fee) + "</b>";
+}
+
+function payBill() {
+  try {
+    const request = TransactionBuilder.create()
+      .debit()
+      .type("Bill Payment")
+      .amount($("bAmount").value)
+      .via("bill", $("bGateway").value)                 // BRIDGE
+      .remark($("biller").value + " bill")
+      .context({ biller: $("biller").value, consumerNo: $("consumerNo").value })
+      .build();
+
+    finish(BankingFacade.getInstance().transact(request), "Bill pay ho gaya");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+}
+
+function doRecharge() {
+  try {
+    const request = TransactionBuilder.create()
+      .debit()
+      .type("Mobile Recharge")
+      .amount(rechargeAmount())
+      .via("recharge", $("rGateway").value)             // BRIDGE
+      .remark("Recharge for " + $("rMobile").value)
+      .context({ mobile: $("rMobile").value })
+      .build();
+
+    finish(BankingFacade.getInstance().transact(request), "Recharge ho gaya");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+}
+
+function finish(result, okMsg) {
+  renderResult($("result"), result);
+  showBalance();
+  toast(result.ok ? okMsg : result.error, result.ok ? "ok" : "bad");
+  if (result.ok) renderHeader("payments.html");
+}
+</script>
+</body>
+</html>

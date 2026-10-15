@@ -1,0 +1,139 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Notifications</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>Alerts &amp; Notifications</h2>
+    <p class="sub">
+      Ye saare messages <b>Observer</b> pattern se aaye hain. Har transaction par
+      subject apne registered observers ko <code>update()</code> bhejta hai, aur har
+      observer apne hisaab se message banata hai.
+    </p>
+
+    <div class="grid3">
+      <div>
+        <label for="fChannel">Channel</label>
+        <select id="fChannel" onchange="loadNotifs()">
+          <option value="">All</option>
+          <option>SMS</option>
+          <option>Email</option>
+          <option>Push</option>
+          <option>Alert</option>
+        </select>
+      </div>
+      <div style="align-self:end">
+        <button class="btn small grey" onclick="markAllRead()">Mark all as read</button>
+      </div>
+      <div style="align-self:end">
+        <button class="btn small red" onclick="clearNotifs()">Clear all</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Inbox <span class="hint" id="nCount"></span></h2>
+    <div id="nList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Currently Attached Observers</h2>
+    <p class="sub">Settings page se inhe on/off kar sakte ho &mdash; wahi attach / detach hai.</p>
+    <div id="obsList"></div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("");
+  loadNotifs();
+  loadObservers();
+}
+
+function loadNotifs() {
+  const db     = DatabaseConnection.getInstance();
+  const userId = SessionManager.getInstance().getUser().id;
+  const filter = $("fChannel").value;
+
+  let rows = db.select("notifications", n => n.userId === userId);
+  if (filter) rows = rows.filter(n => n.channel === filter);
+  rows.reverse();
+
+  const list = $("nList");
+
+  if (rows.length === 0) {
+    list.innerHTML = '<p class="empty">Koi notification nahi hai. ' +
+                     'Ek transaction karke dekho.</p>';
+    $("nCount").textContent = "";
+    return;
+  }
+
+  const unread = rows.filter(n => !n.read).length;
+  $("nCount").textContent = "(" + rows.length + " total, " + unread + " unread)";
+
+  list.innerHTML = rows.map(n =>
+    '<div class="notif ' + (n.read ? "" : "unread") + '">' +
+      '<div class="head">' +
+        '<span class="title"><span class="pill blue">' + n.channel + "</span> " + n.title + "</span>" +
+        '<span class="time">' + n.time + "</span>" +
+      "</div>" +
+      '<div class="body">' + n.message + "</div>" +
+    "</div>").join("");
+}
+
+function markAllRead() {
+  const db     = DatabaseConnection.getInstance();
+  const userId = SessionManager.getInstance().getUser().id;
+
+  for (const n of db.select("notifications", x => x.userId === userId && !x.read)) {
+    db.update("notifications", n.id, { read: true });
+  }
+  loadNotifs();
+  renderHeader("");
+  toast("Sab read mark ho gaye");
+}
+
+function clearNotifs() {
+  DatabaseConnection.getInstance().truncate("notifications");
+  loadNotifs();
+  renderHeader("");
+  toast("Notifications clear ho gaye");
+}
+
+function loadObservers() {
+  const session = SessionManager.getInstance();
+  const subject = buildSubject(session.getUser(), session.getAccount());
+
+  $("obsList").innerHTML = subject.getObserverNames().map(n =>
+    '<div class="notif"><div class="title">' + n + "</div></div>").join("");
+}
+</script>
+</body>
+</html>

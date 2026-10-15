@@ -1,0 +1,190 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Transfer Money</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="balance-card" style="margin-bottom:18px">
+    <div class="label">AVAILABLE BALANCE</div>
+    <div class="amount" id="balAmount">Rs. 0</div>
+    <div class="meta" id="balMeta"></div>
+  </div>
+
+  <div class="card">
+    <h2>Send Money</h2>
+    <p class="sub">
+      Payment type aur gateway alag alag choose hote hain aur runtime par jud jaate
+      hain &mdash; yahi <b>Bridge</b> pattern hai. Fee gateway ke hisaab se lagti hai.
+    </p>
+
+    <div class="grid2">
+      <div>
+        <label for="toAcc">Beneficiary Account Number</label>
+        <select id="toAcc"></select>
+
+        <label for="tAmount">Amount (Rs.)</label>
+        <input type="number" id="tAmount" value="5000" oninput="updateFee()">
+
+        <label for="tRemark">Remark</label>
+        <input type="text" id="tRemark" value="Money transfer">
+      </div>
+
+      <div>
+        <label for="tGateway">Payment Gateway <span class="hint">(Implementation)</span></label>
+        <select id="tGateway" onchange="updateFee()"></select>
+
+        <div class="note" id="feeBox" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <button class="btn" id="payBtn" onclick="doTransfer()">Send Money</button>
+  </div>
+
+  <div class="card">
+    <h2>Transaction Result</h2>
+    <div id="result"><p class="empty">Transfer karne par yahan poori detail dikhegi.</p></div>
+  </div>
+
+  <div class="card">
+    <h2>Other Accounts in SmartBank</h2>
+    <p class="sub">Demo ke liye bank ke saare accounts &mdash; inme se kisi ko bhi paisa bhej sakte ho.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Account No</th><th>Holder</th><th>Type</th></tr></thead>
+        <tbody id="accBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("transfer.html");
+  fillGateways("tGateway");
+  showBalance();
+  loadBeneficiaries();
+  updateFee();
+  $("payBtn").textContent = CURRENT_WORDING.payButton();
+}
+
+// gateway list ek hi jagah se aati hai (payments.js + adapter.js)
+function fillGateways(id) {
+  $(id).innerHTML = GATEWAY_OPTIONS.map(g =>
+    '<option value="' + g.code + '">' + g.label + "</option>").join("");
+}
+
+function showBalance() {
+  const facade = BankingFacade.getInstance();
+  const acc    = facade.details(facade.activeAccount().accNo);
+  const state  = getAccountState(acc.status);
+  const deco   = decorateAccount(acc);
+
+  $("balAmount").textContent = "Rs. " + money(acc.balance);
+  $("balMeta").innerHTML     = deco.getDescription() + "  |  " + acc.accNo +
+                               '  |  <span class="pill ' + state.getColor() + '">' +
+                               state.getName() + "</span>";
+}
+
+function loadBeneficiaries() {
+  const db   = DatabaseConnection.getInstance();
+  const mine = SessionManager.getInstance().get().accNo;
+
+  // band ho chuke account ko paisa nahi bhej sakte (STATE pattern)
+  const others = db.select("accounts",
+                   a => a.accNo !== mine && getAccountState(a.status).canCredit().ok);
+  const select = $("toAcc");
+  const body   = $("accBody");
+
+  if (others.length === 0) {
+    select.innerHTML = '<option value="">Koi doosra account nahi hai</option>';
+    body.innerHTML   = '<tr><td colspan="3" class="empty">Sirf aapka hi account hai. ' +
+                       'Logout karke ek aur account bana kar dekho.</td></tr>';
+    return;
+  }
+
+  select.innerHTML = "";
+  body.innerHTML   = "";
+
+  for (const a of others) {
+    const user = db.selectOne("users", u => u.id === a.userId);
+    const name = user ? user.name : "Unknown";
+
+    select.innerHTML += '<option value="' + a.accNo + '">' +
+                        a.accNo + " - " + name + "</option>";
+
+    body.innerHTML += "<tr><td>" + a.accNo + "</td><td>" + name +
+                      "</td><td>" + a.type + "</td></tr>";
+  }
+}
+
+// live fee preview - Bridge ke implementor se seedha
+function updateFee() {
+  const amount  = Number($("tAmount").value) || 0;
+  const gateway = getGateway($("tGateway").value);
+  const fee     = gateway.getFee(amount);
+
+  $("feeBox").innerHTML =
+    "<b>" + gateway.getName() + "</b><br>" +
+    "Amount: Rs. " + money(amount) + "<br>" +
+    "Gateway fee: Rs. " + money(fee) + "<br>" +
+    "<b>Total debit: Rs. " + money(amount + fee) + "</b><br>" +
+    '<span class="hint">Gateway limit: Rs. ' + money(gateway.getMaxLimit()) + "</span>";
+}
+
+function doTransfer() {
+  const toAcc = $("toAcc").value;
+  if (!toAcc) return toast("Pehle beneficiary select karo.", "bad");
+
+  try {
+    // BUILDER : request step by step banti hai
+    const request = TransactionBuilder.create()
+      .debit()
+      .type("Transfer")
+      .amount($("tAmount").value)
+      .via("transfer", $("tGateway").value)          // BRIDGE
+      .to(toAcc)
+      .remark($("tRemark").value + " to " + toAcc)
+      .context({ vpa: "user@smartbank", walletId: "9876543210@quickpay" })
+      .build();
+
+    // FACADE : ek hi jagah se poora system chalta hai
+    const result = BankingFacade.getInstance().transact(request);
+
+    renderResult($("result"), result);
+    showBalance();
+    loadBeneficiaries();
+    toast(result.ok ? "Paisa bhej diya gaya" : result.error, result.ok ? "ok" : "bad");
+    if (result.ok) renderHeader("transfer.html");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+}
+</script>
+</body>
+</html>

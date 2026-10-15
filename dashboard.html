@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBank - Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="wrap">
+
+  <div class="grid2">
+    <div class="balance-card">
+      <div class="label" id="balLabel">ACCOUNT BALANCE</div>
+      <div class="amount" id="balAmount">Rs. 0</div>
+      <div class="meta" id="balMeta"></div>
+      <div class="meta" id="balState" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card" style="margin:0">
+      <h2 id="greeting">Welcome</h2>
+      <p class="sub" id="accSub"></p>
+      <div class="grid3">
+        <div class="stat"><div class="k">Interest Rate</div><div class="v" id="sInterest">-</div></div>
+        <div class="stat"><div class="k">Min Balance</div><div class="v" id="sMin">-</div></div>
+        <div class="stat"><div class="k">Daily Limit</div><div class="v" id="sLimit">-</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Quick Actions</h2>
+    <p class="sub">Roz ke kaam yahan se ek click me.</p>
+    <div class="grid3">
+      <a href="banking.html"><button class="btn block">Deposit / Withdraw</button></a>
+      <a href="transfer.html"><button class="btn block">Send Money</button></a>
+      <a href="payments.html"><button class="btn block">Bills &amp; Recharge</button></a>
+      <a href="accounts.html"><button class="btn block grey">My Accounts</button></a>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card" style="margin:0">
+      <h2>Last Few Transactions</h2>
+      <div id="chart"></div>
+    </div>
+
+    <div class="card" style="margin:0">
+      <h2>Account Add-ons <span class="hint">(Decorator)</span></h2>
+      <div id="addonBox"></div>
+      <a href="accounts.html"><button class="btn small grey" style="margin-top:12px">Manage add-ons</button></a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Recent Transactions</h2>
+    <p class="sub">Ye data database (<code>transactions</code> table) se aa raha hai.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Ref</th><th>Type</th><th>Mode</th><th>Approved By</th><th>Status</th>
+              <th class="num">Amount</th><th class="num">Fee</th><th class="num">Balance</th>
+              <th>Remark</th><th>Time</th></tr>
+        </thead>
+        <tbody id="txnBody"></tbody>
+      </table>
+    </div>
+    <a href="history.html"><button class="btn grey small" style="margin-top:12px">View full history</button></a>
+  </div>
+
+  <div class="card">
+    <h2>Account Summary</h2>
+    <div class="grid3">
+      <div class="stat"><div class="k">Total Transactions</div><div class="v" id="sTxn">0</div></div>
+      <div class="stat"><div class="k">Total Credited</div><div class="v" id="sIn">Rs. 0</div></div>
+      <div class="stat"><div class="k">Total Debited</div><div class="v" id="sOut">Rs. 0</div></div>
+      <div class="stat"><div class="k">Reward Points</div><div class="v" id="sPoints">0</div></div>
+      <div class="stat"><div class="k">My Accounts</div><div class="v" id="sAccs">0</div></div>
+      <div class="stat"><div class="k">Total With Bank</div><div class="v" id="sTotal">Rs. 0</div></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>SmartBank &mdash; Design Patterns Lab Project</footer>
+<div id="toast" class="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/accounts.js"></script>
+<script src="js/state.js"></script>
+<script src="js/strategy.js"></script>
+<script src="js/decorator.js"></script>
+<script src="js/approval.js"></script>
+<script src="js/payments.js"></script>
+<script src="js/adapter.js"></script>
+<script src="js/channels.js"></script>
+<script src="js/observer.js"></script>
+<script src="js/builder.js"></script>
+<script src="js/command.js"></script>
+<script src="js/facade.js"></script>
+<script src="js/app.js"></script>
+<script>
+if (requireLogin()) {
+  renderHeader("dashboard.html");
+  loadDashboard();
+}
+
+function loadDashboard() {
+  const facade  = BankingFacade.getInstance();
+  const session = SessionManager.getInstance();
+  const user    = session.getUser();
+
+  // ---- PROXY se account details lo ----
+  const acc   = facade.details(session.get().accNo);
+  const state = getAccountState(acc.status);       // STATE
+  const deco  = decorateAccount(acc);              // DECORATOR
+
+  $("greeting").textContent  = CURRENT_WORDING.greeting(user.name);
+  $("balLabel").textContent  = CURRENT_WORDING.balanceLabel().toUpperCase();
+  $("balAmount").textContent = "Rs. " + money(acc.balance);
+  $("balMeta").textContent   = deco.getDescription() + "  |  " + acc.accNo;
+  $("balState").innerHTML    = '<span class="pill ' + state.getColor() + '">' +
+                               state.getName() + "</span> " + state.getNote();
+
+  $("accSub").textContent = user.email + "  |  " + user.mobile +
+                            "  |  Opened on " + acc.openedOn;
+
+  $("sInterest").textContent = acc.interest + "%";
+  $("sMin").textContent      = "Rs. " + money(acc.minBalance);
+  $("sLimit").textContent    = acc.dailyLimit === 0 ? "N/A" : "Rs. " + money(acc.dailyLimit);
+
+  // ---- add-ons ----
+  const feats = deco.getFeatureNames();
+  $("addonBox").innerHTML = feats.length === 0
+    ? '<p class="empty">Is account par koi add-on nahi laga.</p>'
+    : feats.map(f => '<div class="notif"><div class="title">' + f + "</div></div>").join("") +
+      '<p class="sub" style="margin-top:8px">Monthly fee: Rs. ' +
+      money(deco.getMonthlyFee()) +
+      (deco.getExtraLimit() > 0
+        ? " &nbsp;|&nbsp; Overdraft: Rs. " + money(deco.getExtraLimit()) : "") + "</p>";
+
+  // ---- transactions ----
+  const all  = facade.statement(acc.accNo);
+  const body = $("txnBody");
+
+  if (all.length === 0) {
+    body.innerHTML = '<tr><td colspan="10" class="empty">Abhi tak koi transaction nahi hua.</td></tr>';
+  } else {
+    body.innerHTML = all.slice(0, 6).map(t => txnRowHtml(t)).join("");
+  }
+
+  $("chart").innerHTML = miniChart(all.filter(t => t.status === "APPROVED"));
+
+  const sum  = facade.summary(acc.accNo);
+  const mine = facade.myAccounts();
+
+  $("sTxn").textContent    = all.length;
+  $("sIn").textContent     = "Rs. " + money(sum.credited);
+  $("sOut").textContent    = "Rs. " + money(sum.debited);
+  $("sPoints").textContent = acc.rewardPoints || 0;
+  $("sAccs").textContent   = mine.length;
+  $("sTotal").textContent  = "Rs. " + money(mine.reduce((s, a) => s + a.balance, 0));
+}
+</script>
+</body>
+</html>
